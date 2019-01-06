@@ -1,4 +1,4 @@
-/* nor-nopg -- NoPg.Attachment object implementation */
+/* @norjs/nopg -- NoPg.Attachment object implementation */
 "use strict";
 
 import is from '@norjs/is';

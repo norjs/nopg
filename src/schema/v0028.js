@@ -1,6 +1,6 @@
 /** Database schema creation functions */
 "use strict";
-var NoPg = require('nor-nopg');
+var NoPg = require('../nopg.js');
 module.exports = [
 
 	/** Create PostgreSQL function `get_documents(data json, type json)` which returns the contents for

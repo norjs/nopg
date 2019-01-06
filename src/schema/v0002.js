@@ -1,5 +1,5 @@
 /** Database schema creation functions */
-import NoPg from 'nor-nopg';
+import NoPg from '../nopg.js';
 import uuid from 'uuid/v4';
 import debug from '@norjs/debug';
 module.exports = [

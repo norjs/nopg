@@ -1,5 +1,5 @@
 /** Database schema creation functions */
-var NoPg = require('nor-nopg');
+var NoPg = require('../../nopg.js');
 
 /** check_type */
 function check_type(data, types_id, plv8, ERROR) {

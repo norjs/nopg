@@ -1,5 +1,5 @@
 /** Database schema creation functions */
-var NoPg = require('nor-nopg');
+var NoPg = require('../nopg.js');
 module.exports = [
 
 	/** Function for checking that only valid javascript goes into types.validator column */

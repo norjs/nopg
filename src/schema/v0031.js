@@ -1,6 +1,6 @@
 /** Database schema creation functions */
 "use strict";
-import NoPg from 'nor-nopg';
+import NoPg from '../nopg.js';
 import debug from '@norjs/debug';
 import ARRAY from 'nor-array';
 import _Q from 'q';

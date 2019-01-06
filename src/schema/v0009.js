@@ -1,5 +1,5 @@
 /** Database schema creation functions */
-var NoPg = require('nor-nopg');
+var NoPg = require('../nopg.js');
 module.exports = [
 
 	/*************************************   #4  **************************************************/
