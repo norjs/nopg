@@ -1,24 +1,18 @@
 @norjs/nopg
 ===========
 
-This is a Node.js library which implements NoSQL features over a PostgreSQL v9.3 database.
+This is a Node.js library which implements NoSQL features over a PostgreSQL database (v9.3 and up, with PLv8 extension required).
 
-The original version is at [sendanor/nor-nopg](https://github.com/sendanor/nor-nopg).
+The original version is at [sendanor/nor-nopg](https://github.com/norjs/nopg).
 
 Usage
 -----
 
 ```javascript
-var nopg = require('nor-nopg');
+var nopg = require('@norjs/nopg');
 ```
 
-Before using the database you should initialize it by calling: `nor-nopg --pg=psql://localhost:5432/test init`
-
-See also
---------
-
-* [nor-app](https://github.com/sendanor/nor-app) -- provides a HTTP interface in to a nor-nopg database
-* [nopg](https://github.com/sendanor/nor-nopg-cli) -- Shell scripting CLI for nor-nopg
+Before using the database you should initialize it by calling: `nopg --pg=psql://localhost:5432/test init`
 
 Summary
 -------
@@ -27,7 +21,7 @@ Summary
 
 |  Name  |       Description        |                             Example                             |
 | ------ | ------------------------ | --------------------------------------------------------------- |
-| `NoPg` | `NoPg` module            | `var NoPg = require('nor-nopg');`                               |
+| `NoPg` | `NoPg` module            | `var NoPg = require('@norjs/nopg');`                               |
 | `db`   | `NoPg` instance          | `NoPg.start(...).then(function(db) { ... });`                   |
 | `doc`  | `NoPg.Document` instance | `db.create()(...).shift().then(function(doc) { ... });`         |
 | `type` | `NoPg.Type` instance     | `db.declareType("name")().shift().then(function(type) { ... });` |
@@ -36,35 +30,35 @@ Summary
 
 |                            Short usage                            |                                                           Description                                                            |                                    Tested at                                     |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `NoPg.start(...)`                                                 | [Get connection and start transaction](https://github.com/sendanor/nor-nopg#connections-and-transactions)                        | [L42](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L42)   |
-| `db.init()`                                                       | [Initialize database](https://github.com/sendanor/nor-nopg#initialize-database)                                                  | [L15](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L15)   |
-| `db.create()({"hello":"world"})`                                  | [Create document without type](https://github.com/sendanor/nor-nopg#create-document-without-type)                                | [L41](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L41)   |
-| `db.create("MyType")({"hello":"world"})`                          | [Create document with type as string](https://github.com/sendanor/nor-nopg#create-document-with-type-as-string)                  | [L57](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L57)   |
-| `db.create(type)({"hello":"world"})`                              | [Create document with type as object](https://github.com/sendanor/nor-nopg#create-document-with-type-as-object)                  | [L306](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L306) |
-| `db.search()({"$id": "b58e402e-6b39-11e3-99c7-0800279ca880"})`    | [Search documents by id](https://github.com/sendanor/nor-nopg#search-documents-by-id)                                            | [L156](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L156) |
-| `db.search()({"hello": "world"})`                                 | [Search documents by values](https://github.com/sendanor/nor-nopg#search-documents-by-values)                                    | [L130](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L130) |
-| `db.search()(function(doc) { return doc.hello === 'world'; })`    | [Search documents by custom function](https://github.com/sendanor/nor-nopg#search-documents-by-custom-function)                  |                                                                                  |
-| `db.search("Foobar")()`                                           | [Search documents by type string](https://github.com/sendanor/nor-nopg#search-documents-by-type-string)                          | [L185](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L185) |
-| `db.search("Foobar")({"name":"hello"})`                           | [Search documents by type string with values](https://github.com/sendanor/nor-nopg#search-documents-by-type-string-with-values)  | [L219](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L219) |
-| `db.search(type)()`                                               | [Search documents by type](https://github.com/sendanor/nor-nopg#search-documents-by-type)                                        |                                                                                  |
-| `db.search(type)({"name":"hello"})`                               | [Search documents by type as string with values](https://github.com/sendanor/nor-nopg#search-documents-by-type)                  | [L254](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L254) |
-| `db.update(doc)`                                                  | [Edit document by instance of NoPg.Document](https://github.com/sendanor/nor-nopg#edit-document-by-instance-of-nopgdocument)     | [L93](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L93)   |
-| `db.update(doc, {"hello": "world"})`                              | [Edit document by plain document](https://github.com/sendanor/nor-nopg#edit-document-by-plain-document)                          | [L74](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L74)   |
-| n/a                                                               | [Edit documents by type](https://github.com/sendanor/nor-nopg#edit-documents-by-type)                                            |                                                                                  |
-| `db.del(doc)`                                                     | [Delete document by instance of NoPg.Document](https://github.com/sendanor/nor-nopg#delete-document-by-instance-of-nopgdocument) | [L113](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L113) |
-| n/a                                                               | [Delete documents by instance of NoPg.Type](https://github.com/sendanor/nor-nopg#delete-documents-by-instance-of-nopgtype)       |                                                                                  |
-| `db.del(type)`                                                    | [Delete type by instance of NoPg.Type](https://github.com/sendanor/nor-nopg#delete-type-by-instance-of-nopgtype)                 | [L400](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L400) |
-| `db.del(attachment)`                                              | [Delete attachment](https://github.com/sendanor/nor-nopg#delete-attachment)                                                      |                                                                                  |
-| `db.declareType("Product")({"$schema":{"type":"object"}})`        | [Create or replace type with name as string](https://github.com/sendanor/nor-nopg#create-or-replace-type-with-name-as-string)                          |                                                                                  |
-| `db.createType("Product")({"$schema":{"type":"object"}})`         | [Create type with name as string](https://github.com/sendanor/nor-nopg#create-type-with-name-as-string)                          |                                                                                  |
-| `db.createType()({"$schema":{"type":"object"}})`                  | [Create type without name](https://github.com/sendanor/nor-nopg#create-type-without-name)                                        |                                                                                  |
-| `db.update(type)`                                                 | [Edit type by instance of NoPg.Type](https://github.com/sendanor/nor-nopg#edit-type-by-instance-of-nopgtype)                     | Yes                                                                                 |
-| `db.update(type, {$schema:{...}})`                                | [Edit type by plain object](https://github.com/sendanor/nor-nopg#edit-type-by-plain-object)                                      | Yes                                                                                 |
-| `db.searchTypes({"$id": "b58e402e-6b39-11e3-99c7-0800279ca880"})` | [Search types](https://github.com/sendanor/nor-nopg#search-types)                                                                |                                                                                  |
-| `doc.createAttachment(data, {"content-type": "image/png"})`       | [Create attachments](https://github.com/sendanor/nor-nopg#create-attachments)                                                    |                                                                                  |
-| `doc.searchAttachments()`                                         | [Search attachments](https://github.com/sendanor/nor-nopg#search-attachments)                                                    |                                                                                  |
-| `doc.getAttachment("b58e402e-6b39-11e3-99c7-0800279ca880")`       | [Search attachments](https://github.com/sendanor/nor-nopg#search-attachments)                                                    |                                                                                  |
-| `db.import('/path/to/tv4.js', {'$name': 'tv4'})`                  | [Import or upgrade module in database](https://github.com/sendanor/nor-nopg#import-or-upgrade-module-in-database)                |                                                                                  |
+| `NoPg.start(...)`                                                 | [Get connection and start transaction](https://github.com/norjs/nopg#connections-and-transactions)                        | [L42](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L42)   |
+| `db.init()`                                                       | [Initialize database](https://github.com/norjs/nopg#initialize-database)                                                  | [L15](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L15)   |
+| `db.create()({"hello":"world"})`                                  | [Create document without type](https://github.com/norjs/nopg#create-document-without-type)                                | [L41](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L41)   |
+| `db.create("MyType")({"hello":"world"})`                          | [Create document with type as string](https://github.com/norjs/nopg#create-document-with-type-as-string)                  | [L57](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L57)   |
+| `db.create(type)({"hello":"world"})`                              | [Create document with type as object](https://github.com/norjs/nopg#create-document-with-type-as-object)                  | [L306](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L306) |
+| `db.search()({"$id": "b58e402e-6b39-11e3-99c7-0800279ca880"})`    | [Search documents by id](https://github.com/norjs/nopg#search-documents-by-id)                                            | [L156](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L156) |
+| `db.search()({"hello": "world"})`                                 | [Search documents by values](https://github.com/norjs/nopg#search-documents-by-values)                                    | [L130](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L130) |
+| `db.search()(function(doc) { return doc.hello === 'world'; })`    | [Search documents by custom function](https://github.com/norjs/nopg#search-documents-by-custom-function)                  |                                                                                  |
+| `db.search("Foobar")()`                                           | [Search documents by type string](https://github.com/norjs/nopg#search-documents-by-type-string)                          | [L185](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L185) |
+| `db.search("Foobar")({"name":"hello"})`                           | [Search documents by type string with values](https://github.com/norjs/nopg#search-documents-by-type-string-with-values)  | [L219](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L219) |
+| `db.search(type)()`                                               | [Search documents by type](https://github.com/norjs/nopg#search-documents-by-type)                                        |                                                                                  |
+| `db.search(type)({"name":"hello"})`                               | [Search documents by type as string with values](https://github.com/norjs/nopg#search-documents-by-type)                  | [L254](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L254) |
+| `db.update(doc)`                                                  | [Edit document by instance of NoPg.Document](https://github.com/norjs/nopg#edit-document-by-instance-of-nopgdocument)     | [L93](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L93)   |
+| `db.update(doc, {"hello": "world"})`                              | [Edit document by plain document](https://github.com/norjs/nopg#edit-document-by-plain-document)                          | [L74](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L74)   |
+| n/a                                                               | [Edit documents by type](https://github.com/norjs/nopg#edit-documents-by-type)                                            |                                                                                  |
+| `db.del(doc)`                                                     | [Delete document by instance of NoPg.Document](https://github.com/norjs/nopg#delete-document-by-instance-of-nopgdocument) | [L113](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L113) |
+| n/a                                                               | [Delete documents by instance of NoPg.Type](https://github.com/norjs/nopg#delete-documents-by-instance-of-nopgtype)       |                                                                                  |
+| `db.del(type)`                                                    | [Delete type by instance of NoPg.Type](https://github.com/norjs/nopg#delete-type-by-instance-of-nopgtype)                 | [L400](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L400) |
+| `db.del(attachment)`                                              | [Delete attachment](https://github.com/norjs/nopg#delete-attachment)                                                      |                                                                                  |
+| `db.declareType("Product")({"$schema":{"type":"object"}})`        | [Create or replace type with name as string](https://github.com/norjs/nopg#create-or-replace-type-with-name-as-string)                          |                                                                                  |
+| `db.createType("Product")({"$schema":{"type":"object"}})`         | [Create type with name as string](https://github.com/norjs/nopg#create-type-with-name-as-string)                          |                                                                                  |
+| `db.createType()({"$schema":{"type":"object"}})`                  | [Create type without name](https://github.com/norjs/nopg#create-type-without-name)                                        |                                                                                  |
+| `db.update(type)`                                                 | [Edit type by instance of NoPg.Type](https://github.com/norjs/nopg#edit-type-by-instance-of-nopgtype)                     | Yes                                                                                 |
+| `db.update(type, {$schema:{...}})`                                | [Edit type by plain object](https://github.com/norjs/nopg#edit-type-by-plain-object)                                      | Yes                                                                                 |
+| `db.searchTypes({"$id": "b58e402e-6b39-11e3-99c7-0800279ca880"})` | [Search types](https://github.com/norjs/nopg#search-types)                                                                |                                                                                  |
+| `doc.createAttachment(data, {"content-type": "image/png"})`       | [Create attachments](https://github.com/norjs/nopg#create-attachments)                                                    |                                                                                  |
+| `doc.searchAttachments()`                                         | [Search attachments](https://github.com/norjs/nopg#search-attachments)                                                    |                                                                                  |
+| `doc.getAttachment("b58e402e-6b39-11e3-99c7-0800279ca880")`       | [Search attachments](https://github.com/norjs/nopg#search-attachments)                                                    |                                                                                  |
+| `db.import('/path/to/tv4.js', {'$name': 'tv4'})`                  | [Import or upgrade module in database](https://github.com/norjs/nopg#import-or-upgrade-module-in-database)                |                                                                                  |
 
 ### PostgreSQL and JavaScript name mapping
 
@@ -256,12 +250,11 @@ When transaction has been rollback'd.
 ### User-defined events
 
 If you want your application to use custom `LISTEN` or `NOTIFY`, we recommend 
-directly using 
-[`nor-pg`](https://github.com/sendanor/nor-pg#events-usage-example). It has a 
+directly using [`@norjs/pg`](https://github.com/norjs/pg#events-usage-example). It has a 
 nice familiar interface for it.
 
 There is no reason to implement this feature in NoPG since implementing it 
-wouldn't invent anything new; it would be direct wrapper for `nor-pg`.
+wouldn't invent anything new; it would be direct wrapper for `@norjs/pg`.
 
 Our promise implementation
 --------------------------
@@ -270,7 +263,7 @@ We use an extended promise implementation which allows chaining of
 multiple methods together.
 
 Under the hood we are using [`q` promises](https://github.com/kriskowal/q) 
-which are extended using [`nor-extend`](https://github.com/sendanor/nor-extend). 
+which are extended using [`@norjs/extend`](https://github.com/norjs/extend). 
 
 However these extended features are not required. You may use our promises 
 just like any other q-promises.
@@ -353,7 +346,7 @@ db.create("MyType")({"hello":"world"}).then(function(db) {
 });
 ```
 
-Tested at [test-nopg.js:57](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L57).
+Tested at [test-nopg.js:57](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L57).
 
 #### Create document with type as object
 
@@ -434,7 +427,7 @@ db.update(doc).then(function(db) {
 });
 ```
 
-Tested at [test-nopg.js:93](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L93).
+Tested at [test-nopg.js:93](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L93).
 
 #### Edit document by plain document
 
@@ -444,7 +437,7 @@ db.update(doc, {"hello": "world"}).then(function(db) {
 });
 ```
 
-Tested at [test-nopg.js:74](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L74).
+Tested at [test-nopg.js:74](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L74).
 
 #### Edit documents by type
 
@@ -462,7 +455,7 @@ db.del(doc).then(function(db) {
 });
 ```
 
-Tested at [test-nopg.js:113](https://github.com/sendanor/nor-nopg/blob/master/tests/test-nopg.js#L113).
+Tested at [test-nopg.js:113](https://github.com/norjs/nopg/blob/master/tests/test-nopg.js#L113).
 
 #### Delete documents by instance of `NoPg.Type`
 
@@ -621,12 +614,7 @@ Run lint test
 Commercial Support
 ------------------
 
-You can buy commercial support from [Sendanor](http://sendanor.com/software).
-
-TODO
-----
-
-We use [Trello board](//trello.com/b/6qC63gw5/nor-nopg) to organize development and keep track on things to do.
+You can buy commercial support from [Sendanor](http://sendanor.com/).
 
 Internal Database Schema
 ------------------------
