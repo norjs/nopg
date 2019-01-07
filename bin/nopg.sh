@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-if uname -s|grep -iq Darwin; then
-    self="$0"
-else
-    self="$(readlink -e "$0")"
-fi
+self="$(node -e 'console.log(require("fs").realpathSync(process.argv[1]))' "$0")"
 self_dir="$(dirname "$self")"
 node="$(command -v node || command -v nodejs)"
 
