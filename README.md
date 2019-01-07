@@ -5,6 +5,14 @@ This is a Node.js library which implements NoSQL features over a PostgreSQL data
 
 The original version is at [sendanor/nor-nopg](https://github.com/norjs/nopg).
 
+Install
+-------
+
+  1. Install [PostgreSQL server](https://www.postgresql.org/)
+  2. Install [PLv8](https://github.com/plv8/plv8)
+  3. Install @norjs/nopg: `npm install @norjs/nopg`
+  4. Profit
+
 Usage
 -----
 
