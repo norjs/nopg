@@ -1,7 +1,2 @@
-/* nor-nopg */
-"use strict";
-
-//var pg = require('nor-pg');
-module.exports = require('./nopg.js');
-
-/* EOF */
+export * from './nopg.js';
+export {default} from './nopg.js';

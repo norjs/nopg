@@ -1,37 +1,14 @@
-/**
- * nor-nopg -- NoSQL database library for PostgreSQL
- * Copyright 2014-2018 Sendanor <info@sendanor.fi>,
- *           2014-2018 Jaakko-Heikki Heusala <jheusala@iki.fi>
- */
-
-"use strict";
-
 import debug from '@norjs/debug';
 import ARRAY from 'nor-array';
 import FUNCTION from 'nor-function';
-
-// Make NOPG_EVENT_TIMES as obsolete
-if( (process.env.NOPG_EVENT_TIMES !== undefined) && (process.env.DEBUG_NOPG_EVENT_TIMES === undefined) ) {
-	debug.warn('Please use DEBUG_NOPG_EVENT_TIMES instead of obsolete NOPG_EVENT_TIMES');
-	process.env.DEBUG_NOPG_EVENT_TIMES = process.env.NOPG_EVENT_TIMES;
-}
-
 import util from 'util';
 import Q from 'q';
 import is from '@norjs/is';
 import FS from 'fs';
-
 import moment from 'moment';
 import pg from '@norjs/pg';
 import { types } from '@norjs/pg';
-const TIMESTAMPTZ_OID = 1184;
-const TIMESTAMP_OID = 1114;
-types.setTypeParser(TIMESTAMP_OID, (timestamp) => moment(timestamp).toISOString());
-types.setTypeParser(TIMESTAMPTZ_OID, (timestamp) => moment(timestamp).toISOString());
-
 import EXTEND from '@norjs/extend';
-const extend = EXTEND.setup({useFunctionPromises:true});
-
 import orm from './orm';
 import merge from 'merge';
 import pghelpers from './pghelpers.js';
@@ -40,6 +17,28 @@ import InsertQuery from './insert_query.js';
 import Predicate from './Predicate.js';
 import EventEmitter from 'events';
 import pg_escape from 'pg-escape';
+
+/**
+ * @file nor-nopg -- NoSQL database library for PostgreSQL
+ * @Copyright 2014-2019 Sendanor <info@sendanor.fi>,
+ *            2014-2019 Jaakko-Heikki Heusala <jheusala@iki.fi>
+ */
+
+// Make NOPG_EVENT_TIMES as obsolete
+if( (process.env.NOPG_EVENT_TIMES !== undefined) && (process.env.DEBUG_NOPG_EVENT_TIMES === undefined) ) {
+	debug.warn('Please use DEBUG_NOPG_EVENT_TIMES instead of obsolete NOPG_EVENT_TIMES');
+	process.env.DEBUG_NOPG_EVENT_TIMES = process.env.NOPG_EVENT_TIMES;
+}
+
+const TIMESTAMPTZ_OID = 1184;
+
+const TIMESTAMP_OID = 1114;
+
+types.setTypeParser(TIMESTAMP_OID, (timestamp) => moment(timestamp).toISOString());
+
+types.setTypeParser(TIMESTAMPTZ_OID, (timestamp) => moment(timestamp).toISOString());
+
+const extend = EXTEND.setup({useFunctionPromises:true});
 
 /* ----------- ENVIRONMENT SETTINGS ------------- */
 
@@ -97,7 +96,7 @@ function _log_time(sample) {
 	debug.assert(sample.query).ignore(undefined).is('string');
 	debug.assert(sample.params).ignore(undefined).is('array');
 
-	var msg = 'NoPg event ' + sample.event + ' in ' + sample.duration + ' ms';
+	let msg = 'NoPg event ' + sample.event + ' in ' + sample.duration + ' ms';
 	if(sample.query || sample.params) {
 		msg += ': ';
 	}
@@ -116,7 +115,7 @@ function _log_time(sample) {
 
 /** The constructor */
 function NoPg(db) {
-	var self = this;
+	let self = this;
 	if(!db) { throw new TypeError("db invalid: " + util.inspect(db) ); }
 	self._db = db;
 	self._values = [];
@@ -132,9 +131,6 @@ function NoPg(db) {
 /** NoPg has event `timeout` -- when automatic timeout happens, and rollback issued, and connection is freed */
 /** NoPg has event `rollback` -- when rollback hapens */
 /** NoPg has event `commit` -- when commit hapens */
-
-// Exports
-module.exports = NoPg;
 
 function get_true_value(value) {
 	if(!value) { return false; }
@@ -169,45 +165,56 @@ NoPg.DBVersion = orm.DBVersion;
 
 /** Parse obj.$documents.expressions into the object */
 function _parse_object_expressions(obj) {
+
 	debug.assert(obj).is('object');
+
 	if(!obj.$documents) {
 		return;
 	}
 
-	var expressions = obj.$documents.expressions;
+	let expressions = obj.$documents.expressions;
 	if(!expressions) {
 		return;
 	}
 
-	ARRAY(Object.keys(expressions)).forEach(function(prop) {
-		var value = expressions[prop], key;
+	_.forEach(Object.keys(expressions), prop => {
+
+		const value = expressions[prop];
+
 		// FIXME: This code should understand things better
-		if(prop.substr(0, 'content.'.length) === 'content.') {
-			key = prop.substr('content.'.length);
+		const contentPrefix = 'content.';
+
+		let key;
+		if (prop.substr(0, contentPrefix.length) === contentPrefix) {
+			key = prop.substr(contentPrefix.length);
 		} else {
 			key = '$' + prop;
 		}
+
 		obj[key] = value;
+
 	});
+
 }
 
 /** Take first result from the database query and returns new instance of `Type` */
 function _get_result(Type) {
 	return function(rows) {
 		if(!rows) { throw new TypeError("failed to parse result"); }
-		var doc = rows.shift();
+		let doc = rows.shift();
 		if(!doc) { return; }
 
 		if(doc instanceof Type) {
 			return doc;
 		}
 
-		var obj = {};
-		ARRAY(Object.keys(doc)).forEach(function(key) {
+		let obj = {};
+
+		_.forEach(Object.keys(doc), key => {
 
 			if(key === 'documents') {
 				obj['$'+key] = {};
-				ARRAY(Object.keys(doc[key])).forEach(function(k) {
+				_.forEach(Object.keys(doc[key]), k => {
 					if(is.uuid(k)) {
 						obj['$'+key][k] = _get_result(NoPg.Document)([doc[key][k]]);
 					} else {
@@ -230,7 +237,7 @@ function _get_result(Type) {
 function get_results(Type, opts) {
 	opts = opts || {};
 
-	var field_map;
+	let field_map;
 	if(is.func(opts.fieldMap)) {
 		field_map = opts.fieldMap;
 	} else if(is.obj(opts.fieldMap)) {
@@ -260,8 +267,8 @@ function get_results(Type, opts) {
 		/* Parse property in top level field based on a key as an array `[datakey, property_name]` */
 		function parse_field_property(obj, key, value) {
 			//debug.log('key = ', key);
-			var a = key[0];
-			var b = key[1];
+			let a = key[0];
+			let b = key[1];
 			//debug.log('key_a = ', a);
 			//debug.log('key_b = ', b);
 
@@ -276,15 +283,15 @@ function get_results(Type, opts) {
 		function parse_field_property_pg(obj, key, value) {
 			//debug.log('key = ', key);
 			/*jslint regexp: false*/
-			var matches = /^([a-z][a-z0-9\_]*)\-\>\>'([^\']+)'$/.exec(key);
+			let matches = /^([a-z][a-z0-9\_]*)\-\>\>'([^\']+)'$/.exec(key);
 			/*jslint regexp: true*/
-			var a = matches[1];
-			var b = matches[2];
+			let a = matches[1];
+			let b = matches[2];
 			return parse_field_property_pg(obj, [a,b], value);
 		}
 
 		//
-		var new_key;
+		let new_key;
 		if( is.func(field_map) && (new_key = field_map(key)) ) {
 			if( (new_key) && (new_key !== key) ) {
 				return parse_field(obj, new_key, value);
@@ -306,46 +313,50 @@ function get_results(Type, opts) {
 	}
 
 	/* Returns a function which will go through rows and convert them to NoPg format */
-	return function(rows) {
-		return ARRAY(rows).map(function(row, i) {
-			if(!row) { throw new TypeError("failed to parse result #" + i + " from database!"); }
-			//debug.log('input in row = ', row);
+	return rows => _.map(rows, (row, i) => {
+		if ( !row ) {
+			throw new TypeError("failed to parse result #" + i + " from database!");
+		}
+		//debug.log('input in row = ', row);
 
-			//debug.log('row = ', row);
+		//debug.log('row = ', row);
 
-			if(row instanceof Type) {
-				return row;
+		if ( row instanceof Type ) {
+			return row;
+		}
+
+		let obj = {};
+		_.forEach(Object.keys(row), key => {
+
+			if ( key === 'documents' ) {
+
+				obj['$' + key] = {};
+				_.forEach(Object.keys(row[key]), uuid => {
+					if ( !is.uuid(uuid) ) {
+						obj['$' + key][uuid] = row[key][uuid];
+						return;
+					}
+					let sub_doc = row[key][uuid];
+					let sub_obj = {};
+					_.forEach(Object.keys(sub_doc), k => {
+						parse_field(sub_obj, k, sub_doc[k]);
+					});
+					obj['$' + key][uuid] = new NoPg.Document(sub_obj);
+				});
+
+				return;
+
 			}
 
-			var obj = {};
-			ARRAY(Object.keys(row)).forEach(function(key) {
+			parse_field(obj, key, row[key]);
 
-				if(key === 'documents') {
-					obj['$'+key] = {};
-					ARRAY(Object.keys(row[key])).forEach(function(uuid) {
-						if(!is.uuid(uuid)) {
-							obj['$'+key][uuid] = row[key][uuid];
-							return;
-						}
-						var sub_doc = row[key][uuid];
-						var sub_obj = {};
-						ARRAY(Object.keys(sub_doc)).forEach(function(k) {
-							parse_field(sub_obj, k, sub_doc[k]);
-						});
-						obj['$'+key][uuid] = new NoPg.Document(sub_obj);
-					});
-					return;
-				}
+		});
 
-				parse_field(obj, key, row[key]);
-			});
+		_parse_object_expressions(obj);
 
-			_parse_object_expressions(obj);
-
-			//debug.log('result in obj = ', obj);
-			return new Type(obj);
-		}).valueOf();
-	};
+		//debug.log('result in obj = ', obj);
+		return new Type(obj);
+	}).valueOf();
 }
 
 /** Takes the result and saves it into `self`. If `self` is one of `NoPg.Document`, 
@@ -387,7 +398,7 @@ function get_predicate_datakey(Type) {
 }
 
 // Pre-define function
-var parse_predicate_document_relations;
+let parse_predicate_document_relations;
 
 /** */
 function parse_keyref_json(datakey, key) {
@@ -424,12 +435,12 @@ function _parse_predicate_key(Type, opts, key) {
 	debug.assert(key).is('string');
 
 	if(key[0] !== '$') {
-		var datakey = get_predicate_datakey(Type);
+		let datakey = get_predicate_datakey(Type);
 		//return new Predicate( "json_extract_path("+datakey+", '"+JSON.stringify([key])+"'::json->>0)::text", [], {'datakey': datakey, 'key': key});
 		return new Predicate( parse_keyref_json(datakey, key), [], {'datakey': datakey, 'key': key});
 	}
 
-	var _key = key.substr(1);
+	let _key = key.substr(1);
 
 	if( (opts.epoch === true) && ( (key === '$created') || (key === '$modified') ) ) {
 		//return new Predicate("to_json(extract(epoch from "+_key+")*1000)", [], {'key':_key});
@@ -437,8 +448,8 @@ function _parse_predicate_key(Type, opts, key) {
 	}
 
 	if(key === '$documents') {
-		var traits = (opts && opts.traits) || {};
-		var documents = (traits && traits.documents) || [];
+		let traits = (opts && opts.traits) || {};
+		let documents = (traits && traits.documents) || [];
 		debug.assert(documents).is('array');
 		return new Predicate("get_documents(row_to_json("+(Type.meta.table)+".*), $::json)", [
 			JSON.stringify(parse_predicate_document_relations(Type, documents, traits))
@@ -464,13 +475,13 @@ function _parse_predicate_key(Type, opts, key) {
 parse_predicate_document_relations = function parse_predicate_document_relations(ObjType, documents, traits) {
 	return ARRAY(documents).map(function(d) {
 
-		var parts = d.split('|');
-		var expression = parts.shift();
-		var fields = parts.join('|') || '*';
+		let parts = d.split('|');
+		let expression = parts.shift();
+		let fields = parts.join('|') || '*';
 
-		var prop, type_name;
-		var external_index = expression.indexOf('{');
-		var type_index = expression.indexOf('#');
+		let prop, type_name;
+		let external_index = expression.indexOf('{');
+		let type_index = expression.indexOf('#');
 		if( (type_index >= 0) && ( (external_index < 0) || (type_index < external_index) ) ) {
 			type_name = expression.substr(0, type_index);
 			prop = expression.substr(type_index+1);
@@ -480,7 +491,7 @@ parse_predicate_document_relations = function parse_predicate_document_relations
 
 		fields = ARRAY(fields.split(',')).map(function(f) {
 			if(f === '*') { return {'query':'*'}; }
-			var p = _parse_predicate_key(ObjType, {'traits': traits, 'epoch':false}, f);
+			let p = _parse_predicate_key(ObjType, {'traits': traits, 'epoch':false}, f);
 			return {
 				'name': f,
 				'datakey': p.getMeta('datakey'),
@@ -508,18 +519,18 @@ parse_predicate_document_relations = function parse_predicate_document_relations
 };
 
 /** Returns true if first letter is dollar */
-var first_letter_is_dollar = require('./first_letter_is_dollar.js');
+let first_letter_is_dollar = require('./first_letter_is_dollar.js');
 
 /** @FIXME Implement escape? */
 function is_valid_key(key) {
-	var keyreg = /^[a-zA-Z0-9_\-\.]+$/;
+	let keyreg = /^[a-zA-Z0-9_\-\.]+$/;
 	return keyreg.test(key);
 }
 
 /** */
 function parse_meta_properties(res, opts, datakey, key) {
 	if(!is_valid_key(key)) { throw new TypeError("Invalid keyword: " + key); }
-	var keyref = parse_keyref_text(datakey, key);
+	let keyref = parse_keyref_text(datakey, key);
 	// FIXME: This should use same code as indexes?
 	if(is.boolean(opts[key])) {
 		res["(("+keyref+")::boolean IS TRUE)"] = (opts[key] === true) ? 'true' : 'false';
@@ -532,12 +543,12 @@ function parse_meta_properties(res, opts, datakey, key) {
 
 /** */
 function parse_top_level_properties(res, opts, key) {
-	var k = key.substr(1);
+	let k = key.substr(1);
 	res[k] = opts[key];
 }
 
 /** Convert properties like {"$foo":123} -> "foo = 123" and {foo:123} -> "(meta->'foo')::numeric = 123" and {foo:"123"} -> "meta->'foo' = '123'"
- * Usage: `var where = parse_predicates(NoPg.Document)({"$foo":123})`
+ * Usage: `let where = parse_predicates(NoPg.Document)({"$foo":123})`
  */
 function parse_predicates(Type) {
 
@@ -549,8 +560,8 @@ function parse_predicates(Type) {
 		debug.assert(opts).ignore(undefined).is('object');
 
 		opts = opts || {};
-		var datakey = get_predicate_datakey(Type);
-		var res = {};
+		let datakey = get_predicate_datakey(Type);
+		let res = {};
 		ARRAY(Object.keys(opts)).forEach(function(i) {
 			if(first_letter_is_dollar(i)) {
 				// Parse top level properties
@@ -589,9 +600,9 @@ function do_query (self, query, values) {
 		debug.assert(self._db).is('object');
 		debug.assert(self._db[pg.query]).is('function');
 
-		var start_time = new Date();
+		let start_time = new Date();
 		return self._db[pg.query](query, values).then(function(res) {
-			var end_time = new Date();
+			let end_time = new Date();
 
 			self._record_sample({
 				'event': 'query',
@@ -610,7 +621,7 @@ function do_query (self, query, values) {
 
 /* Returns the type condition and pushes new params to `params` */
 function parse_where_type_condition_array(query, type) {
-	var predicates = ARRAY(type).map(function(t) {
+	let predicates = ARRAY(type).map(function(t) {
 		if(is.string(t)) {
 			return new Predicate("type = $", t);
 		}
@@ -659,7 +670,7 @@ function not_undefined(i) {
 
 /** */
 function replace_last(x, from, to) {
-	var i = x.lastIndexOf(from);
+	let i = x.lastIndexOf(from);
 	if(i === -1) {
 		return x;
 	}
@@ -668,7 +679,7 @@ function replace_last(x, from, to) {
 }
 
 /** Functions to build casts for different types */
-var _pgcasts = {
+let _pgcasts = {
 	'direct': function pgcast_direct(x) { return '' + x; },
 	'boolean': function pgcast_boolean(x) { return '(((' + x + ')::text)::boolean IS TRUE)'; },
 	'numeric': function pgcast_numeric(x) { return '((' + x + ')::text)::numeric'; },
@@ -712,7 +723,7 @@ function parse_predicate_pgtype(ObjType, document_type, key) {
 	debug.assert(ObjType).is('function');
 	debug.assert(document_type).ignore(undefined).is('object');
 
-	var schema = (document_type && document_type.$schema) || {};
+	let schema = (document_type && document_type.$schema) || {};
 	debug.assert(schema).is('object');
 
 	if(key[0] === '$') {
@@ -731,7 +742,7 @@ function parse_predicate_pgtype(ObjType, document_type, key) {
 
 	} else {
 
-		var type;
+		let type;
 		if(schema && schema.properties && schema.properties.hasOwnProperty(key) && schema.properties[key].type) {
 			type = schema.properties[key].type;
 		}
@@ -751,7 +762,7 @@ function parse_predicate_pgtype(ObjType, document_type, key) {
 
 /** Returns the correct cast from JSON to PostgreSQL type */
 function parse_predicate_pgcast(ObjType, document_type, key) {
-	var pgtype = parse_predicate_pgtype(ObjType, document_type, key);
+	let pgtype = parse_predicate_pgtype(ObjType, document_type, key);
 	return parse_predicate_pgcast_by_type(pgtype);
 }
 
@@ -761,15 +772,15 @@ function _parse_function_predicate(ObjType, q, def_op, o, ret_type, traits) {
 
 	ret_type = ret_type || 'boolean';
 
-	var func = ARRAY(o).find(is.func);
+	let func = ARRAY(o).find(is.func);
 
 	debug.assert(func).is('function');
 
-	var i = o.indexOf(func);
+	let i = o.indexOf(func);
 	debug.assert(i).is('number');
 
-	var input_nopg_keys = o.slice(0, i);
-	var js_input_params = o.slice(i+1);
+	let input_nopg_keys = o.slice(0, i);
+	let js_input_params = o.slice(i+1);
 
 	debug.assert(input_nopg_keys).is('array');
 	debug.assert(js_input_params).is('array');
@@ -778,24 +789,24 @@ function _parse_function_predicate(ObjType, q, def_op, o, ret_type, traits) {
 	//debug.log('func = ', func);
 	//debug.log('js_input_params = ', js_input_params);
 
-	var _parse_predicate_key_epoch = FUNCTION(_parse_predicate_key).curry(ObjType, {'traits': traits, 'epoch':true});
-	var input_pg_keys = ARRAY(input_nopg_keys).map(_parse_predicate_key_epoch);
+	let _parse_predicate_key_epoch = FUNCTION(_parse_predicate_key).curry(ObjType, {'traits': traits, 'epoch':true});
+	let input_pg_keys = ARRAY(input_nopg_keys).map(_parse_predicate_key_epoch);
 
-	var pg_items = input_pg_keys.map(function(i) { return i.getString(); }).valueOf();
-	var pg_params = input_pg_keys.map(function(i) { return i.getParams(); }).reduce(function(a, b) { return a.concat(b); });
+	let pg_items = input_pg_keys.map(function(i) { return i.getString(); }).valueOf();
+	let pg_params = input_pg_keys.map(function(i) { return i.getParams(); }).reduce(function(a, b) { return a.concat(b); });
 
 	debug.assert(pg_items).is('array');
 	debug.assert(pg_params).is('array');
 
 	//debug.log('input_pg_keys = ', input_pg_keys);
 
-	//var n = arg_params.length;
+	//let n = arg_params.length;
 	//arg_params.push(JSON.stringify(FUNCTION(func).stringify()));
 	//arg_params.push(JSON.stringify(js_input_params));
 
-	var call_func = 'nopg.call_func(array_to_json(ARRAY['+pg_items.join(', ')+"]), $::json, $::json)";
+	let call_func = 'nopg.call_func(array_to_json(ARRAY['+pg_items.join(', ')+"]), $::json, $::json)";
 
-	var type_cast = parse_predicate_pgcast_by_type(ret_type);
+	let type_cast = parse_predicate_pgcast_by_type(ret_type);
 
 	return new Predicate(type_cast(call_func), pg_params.concat( [JSON.stringify(FUNCTION(func).stringify()), JSON.stringify(js_input_params)] ));
 }
@@ -823,11 +834,11 @@ function is_operator(op) {
 }
 
 /* This object is because these functions need each other at the same time and must be defined before use. */
-var _parsers = {};
+let _parsers = {};
 
 /** Parse array predicate */
 _parsers.parse_array_predicate = function _parse_array_predicate(ObjType, q, def_op, traits, o) {
-	var op = 'AND';
+	let op = 'AND';
 
 	if(is_operator(o[0])) {
 		o = [].concat(o);
@@ -838,8 +849,8 @@ _parsers.parse_array_predicate = function _parse_array_predicate(ObjType, q, def
 		return _parse_function_predicate(ObjType, q, def_op, o, parse_operator_type(op), traits);
 	}
 
-	var parse_predicates = FUNCTION(_parsers.recursive_parse_predicates).curry(ObjType, q, def_op, traits);
-	var predicates = ARRAY(o).map( parse_predicates ).filter(not_undefined).valueOf();
+	let parse_predicates = FUNCTION(_parsers.recursive_parse_predicates).curry(ObjType, q, def_op, traits);
+	let predicates = ARRAY(o).map( parse_predicates ).filter(not_undefined).valueOf();
 	return Predicate.join(predicates, op);
 };
 
@@ -854,7 +865,7 @@ _parsers.recursive_parse_predicates = function _recursive_parse_predicates(ObjTy
 
 	if( is.obj(o) ) {
 		o = parse_predicates(ObjType)(o, ObjType.meta.datakey.substr(1) );
-		var predicates = ARRAY(Object.keys(o)).map(function(k) {
+		let predicates = ARRAY(Object.keys(o)).map(function(k) {
 			return new Predicate('' + k + ' = $', [o[k]]);
 		}).valueOf();
 		return Predicate.join(predicates, def_op);
@@ -864,7 +875,7 @@ _parsers.recursive_parse_predicates = function _recursive_parse_predicates(ObjTy
 };
 
 // Exports as normal functions
-var _recursive_parse_predicates = FUNCTION(_parsers.recursive_parse_predicates).curry();
+let _recursive_parse_predicates = FUNCTION(_parsers.recursive_parse_predicates).curry();
 
 /** Returns true if array has values without leading $ */
 function has_property_names(a) {
@@ -990,7 +1001,7 @@ function _parse_select_order(ObjType, document_type, order, q, traits) {
 	debug.assert(order).is('array');
 
 	return ARRAY(order).map(function(o) {
-		var key, type, rest;
+		let key, type, rest;
 		if(is.array(o)) {
 			key = parse_operator_name(o[0]);
 			type = parse_operator_type(o[0], 'text');
@@ -1006,9 +1017,9 @@ function _parse_select_order(ObjType, document_type, order, q, traits) {
 		}
 
 		//debug.log('key = ', key);
-		var parsed_key = _parse_predicate_key(ObjType, {'traits': traits, 'epoch':true}, key);
+		let parsed_key = _parse_predicate_key(ObjType, {'traits': traits, 'epoch':true}, key);
 		//debug.log('parsed_key = ', parsed_key);
-		var pgcast = parse_predicate_pgcast(ObjType, document_type, key);
+		let pgcast = parse_predicate_pgcast(ObjType, document_type, key);
 		//debug.log('pgcast = ', pgcast);
 
 		return new Predicate( [pgcast(parsed_key.getString())].concat(rest).join(' '), parsed_key.getParams(), parsed_key.getMetaObject() );
@@ -1025,7 +1036,7 @@ function _get_type_by_name(self, document_type) {
 			}
 			throw new TypeError("Database has multiple types: " + document_type + " (" + results.length + ")");
 		}
-		var result = results.shift();
+		let result = results.shift();
 		debug.assert(result).is('object');
 		return result;
 	});
@@ -1038,11 +1049,11 @@ function _get_type_by_name(self, document_type) {
  * @param traits {object}
  */
 function prepare_select_query(self, types, search_opts, traits) {
-	var ObjType, document_type, document_type_obj;
+	let ObjType, document_type, document_type_obj;
 	return nr_fcall("nopg:prepare_select_query", function() {
 
 		// If true then this is recursive function call
-		var _recursive = false;
+		let _recursive = false;
 		if(is.obj(traits) && traits._recursive) {
 			_recursive = traits._recursive;
 		}
@@ -1062,7 +1073,7 @@ function prepare_select_query(self, types, search_opts, traits) {
 		}
 
 		// Create the initial query object
-		var q = new Query({
+		let q = new Query({
 			'method': 'select',
 			'ObjType': ObjType,
 			'document_type': document_type
@@ -1087,7 +1098,7 @@ function prepare_select_query(self, types, search_opts, traits) {
 
 		/* Parse `opts_condition` */
 
-		var type_predicate = search_opts ? _recursive_parse_predicates(ObjType, q, ((traits.match === 'any') ? 'OR' : 'AND'), traits, search_opts) : undefined;
+		let type_predicate = search_opts ? _recursive_parse_predicates(ObjType, q, ((traits.match === 'any') ? 'OR' : 'AND'), traits, search_opts) : undefined;
 		if(type_predicate) {
 			q.where(type_predicate);
 		}
@@ -1121,8 +1132,8 @@ function prepare_select_query(self, types, search_opts, traits) {
 				return q;
 			}
 
-			var order_enabled = (traits.order && has_property_names(traits.order)) ? true : false;
-			var group_enabled = (traits.group && has_property_names(traits.group)) ? true : false;
+			let order_enabled = (traits.order && has_property_names(traits.order)) ? true : false;
+			let group_enabled = (traits.group && has_property_names(traits.group)) ? true : false;
 
 			// Only search type if order has been enabled or traits.typeAwareness enabled
 			if(!( group_enabled || order_enabled || traits.typeAwareness )) {
@@ -1159,7 +1170,7 @@ function prepare_select_query(self, types, search_opts, traits) {
 			}
 
 			// Fields to search for
-			var fields = parse_select_fields(ObjType, traits);
+			let fields = parse_select_fields(ObjType, traits);
 			q.fields(fields);
 
 			return q;
@@ -1177,7 +1188,7 @@ function prepare_select_query(self, types, search_opts, traits) {
 function do_select(self, types, search_opts, traits) {
 	return nr_fcall("nopg:do_select", function() {
 		return prepare_select_query(self, types, search_opts, traits).then(function(q) {
-			var result = q.compile();
+			let result = q.compile();
 
 			// Unnecessary since do_query() does it too
 			//if(NoPg.debug) {
@@ -1189,8 +1200,8 @@ function do_select(self, types, search_opts, traits) {
 			debug.assert(result.query).is('string');
 			debug.assert(result.params).is('array');
 
-			var builder;
-			var type = result.documentType;
+			let builder;
+			let type = result.documentType;
 
 			if( (result.ObjType === NoPg.Document) &&
 			  is.string(type) &&
@@ -1223,7 +1234,7 @@ function do_select(self, types, search_opts, traits) {
 function do_count(self, types, search_opts, traits) {
 	return nr_fcall("nopg:do_count", function() {
 		return prepare_select_query(self, types, search_opts, traits).then(function(q) {
-			var result = q.compile();
+			let result = q.compile();
 
 			//if(NoPg.debug) {
 				debug.log('query = ', result.query);
@@ -1233,7 +1244,7 @@ function do_count(self, types, search_opts, traits) {
 			return do_query(self, result.query, result.params ).then(function(rows) {
 				if(!rows) { throw new TypeError("failed to parse result"); }
 				if(rows.length !== 1) { throw new TypeError("result has too many rows: " + rows.length); }
-				var row = rows.shift();
+				let row = rows.shift();
 				if(!row.count) { throw new TypeError("failed to parse result"); }
 				return parseInt(row.count, 10);
 			});
@@ -1243,7 +1254,7 @@ function do_count(self, types, search_opts, traits) {
 }
 
 /** Returns the keyword name without first letter */
-var parse_keyword_name = require('./parse_keyword_name.js');
+let parse_keyword_name = require('./parse_keyword_name.js');
 
 /** Internal INSERT query */
 function prepare_insert_query(self, ObjType, data) {
@@ -1256,7 +1267,7 @@ function prepare_insert_query(self, ObjType, data) {
 function do_insert(self, ObjType, data) {
 	return nr_fcall("nopg:do_insert", function() {
 		return prepare_insert_query(self, ObjType, data).then(function(q) {
-			var result = q.compile();
+			let result = q.compile();
 			return do_query(self, result.query, result.params);
 		});
 	});
@@ -1266,14 +1277,14 @@ function do_insert(self, ObjType, data) {
 function json_cmp(a, b) {
 	a = JSON.stringify(a);
 	b = JSON.stringify(b);
-	var ret = (a === b) ? true : false;
+	let ret = (a === b) ? true : false;
 	return ret;
 }
 
 /** Internal UPDATE query */
 function do_update(self, ObjType, obj, orig_data) {
 	return nr_fcall("nopg:do_update", function() {
-		var query, params, data, where = {};
+		let query, params, data, where = {};
 
 		if(obj.$id) {
 			where.$id = obj.$id;
@@ -1293,7 +1304,7 @@ function do_update(self, ObjType, obj, orig_data) {
 		//debug.log('data = ', data);
 
 		// Select only keys that start with $
-		var keys = ARRAY(ObjType.meta.keys)
+		let keys = ARRAY(ObjType.meta.keys)
 			// Remove leading '$' character from keys
 			.filter(first_letter_is_dollar)
 			.map( parse_keyword_name )
@@ -1343,7 +1354,7 @@ function do_update(self, ObjType, obj, orig_data) {
 function do_delete(self, ObjType, obj) {
 	return nr_fcall("nopg:do_delete", function() {
 		if(!(obj && obj.$id)) { throw new TypeError("opts.$id invalid: " + util.inspect(obj) ); }
-		var query, params;
+		let query, params;
 		query = "DELETE FROM " + (ObjType.meta.table) + " WHERE id = $1";
 		params = [obj.$id];
 		return do_query(self, query, params);
@@ -1403,10 +1414,10 @@ function pg_convert_index_name(field) {
  * @return {*}
  */
 function pg_create_index_name(self, ObjType, type, field, typefield) {
-	var name;
-	var colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
-	var datakey = colname.getMeta('datakey');
-	var field_name = (datakey ? datakey + '.' : '' ) + colname.getMeta('key');
+	let name;
+	let colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
+	let datakey = colname.getMeta('datakey');
+	let field_name = (datakey ? datakey + '.' : '' ) + colname.getMeta('key');
 	if( (ObjType === NoPg.Document) && (typefield !== undefined)) {
 		if(!typefield) {
 			throw new TypeError("No typefield set for NoPg.Document!");
@@ -1428,14 +1439,14 @@ function pg_create_index_name(self, ObjType, type, field, typefield) {
  */
 function pg_drop_index(self, ObjType, type, field, typefield) {
 	return nr_fcall("nopg:pg_drop_index", function() {
-		//var pgcast = parse_predicate_pgcast(ObjType, type, field);
-		var colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
-		var datakey = colname.getMeta('datakey');
-		var field_name = (datakey ? datakey + '.' : '' ) + colname.getMeta('key');
-		var name = pg_create_index_name(self, ObjType, type, field, typefield);
-		var query = "DROP INDEX IF EXISTS "+name;
+		//let pgcast = parse_predicate_pgcast(ObjType, type, field);
+		let colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
+		let datakey = colname.getMeta('datakey');
+		let field_name = (datakey ? datakey + '.' : '' ) + colname.getMeta('key');
+		let name = pg_create_index_name(self, ObjType, type, field, typefield);
+		let query = "DROP INDEX IF EXISTS "+name;
 		//query = Query.numerifyPlaceHolders(query);
-		//var params = colname.getParams();
+		//let params = colname.getParams();
 		//debug.log("params = ", params);
 		return do_query(self, query);
 	});
@@ -1469,10 +1480,10 @@ function wrap_casts(x) {
  * @return {string | *}
  */
 function pg_create_index_query_internal_v1(self, ObjType, type, field, typefield, is_unique) {
-	var query;
-	var pgcast = parse_predicate_pgcast(ObjType, type, field);
-	var colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
-	var name = pg_create_index_name(self, ObjType, type, field, typefield);
+	let query;
+	let pgcast = parse_predicate_pgcast(ObjType, type, field);
+	let colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
+	let name = pg_create_index_name(self, ObjType, type, field, typefield);
 	query = "CREATE " + (is_unique?'UNIQUE ':'') + "INDEX "+name+" ON " + (ObjType.meta.table) + " USING btree ";
 	if( (ObjType === NoPg.Document) && (typefield !== undefined)) {
 		if(!typefield) {
@@ -1495,10 +1506,10 @@ function pg_create_index_query_internal_v1(self, ObjType, type, field, typefield
  * @return {string | *}
  */
 function pg_create_index_query_internal_v2(self, ObjType, type, field, typefield, is_unique) {
-	var query;
-	var pgcast = parse_predicate_pgcast(ObjType, type, field);
-	var colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
-	var name = pg_create_index_name(self, ObjType, type, field, typefield);
+	let query;
+	let pgcast = parse_predicate_pgcast(ObjType, type, field);
+	let colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
+	let name = pg_create_index_name(self, ObjType, type, field, typefield);
 	query = "CREATE " + (is_unique?'UNIQUE ':'') + "INDEX "+name+" ON public." + (ObjType.meta.table) + " USING btree ";
 	if( (ObjType === NoPg.Document) && (typefield !== undefined)) {
 		if(!typefield) {
@@ -1522,13 +1533,13 @@ function pg_create_index_query_internal_v2(self, ObjType, type, field, typefield
  */
 function pg_create_index(self, ObjType, type, field, typefield, is_unique) {
 	return nr_fcall("nopg:pg_create_index", function() {
-		var colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
-		var name = pg_create_index_name(self, ObjType, type, field, typefield);
-		var query = pg_create_index_query_internal_v1(self, ObjType, type, field, typefield, is_unique);
-		var query_v2 = pg_create_index_query_internal_v2(self, ObjType, type, field, typefield, is_unique);
+		let colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
+		let name = pg_create_index_name(self, ObjType, type, field, typefield);
+		let query = pg_create_index_query_internal_v1(self, ObjType, type, field, typefield, is_unique);
+		let query_v2 = pg_create_index_query_internal_v2(self, ObjType, type, field, typefield, is_unique);
 
 		query = Query.numerifyPlaceHolders(query);
-		var params = colname.getParams();
+		let params = colname.getParams();
 		//debug.log("params = ", params);
 		return do_query(self, query, params).then(function verify_index_was_created_correctly(res) {
 			// Check that the index was created correctly
@@ -1554,9 +1565,9 @@ function pg_create_index(self, ObjType, type, field, typefield, is_unique) {
  * @return {string | *}
  */
 function pg_create_index_query_v1 (self, ObjType, type, field, typefield, is_unique) {
-	var colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
-	var query = pg_create_index_query_internal_v1(self, ObjType, type, field, typefield, is_unique);
-	var params = colname.getParams();
+	let colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
+	let query = pg_create_index_query_internal_v1(self, ObjType, type, field, typefield, is_unique);
+	let params = colname.getParams();
 	if(params.length !== 0) {
 		throw new TypeError("pg_create_index_query_v1() does not support params!");
 	}
@@ -1573,9 +1584,9 @@ function pg_create_index_query_v1 (self, ObjType, type, field, typefield, is_uni
  * @return {string | *}
  */
 function pg_create_index_query_v2 (self, ObjType, type, field, typefield, is_unique) {
-	var colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
-	var query = pg_create_index_query_internal_v2(self, ObjType, type, field, typefield, is_unique);
-	var params = colname.getParams();
+	let colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
+	let query = pg_create_index_query_internal_v2(self, ObjType, type, field, typefield, is_unique);
+	let params = colname.getParams();
 	if(params.length !== 0) {
 		throw new TypeError("pg_create_index_query_v2() does not support params!");
 	}
@@ -1592,18 +1603,18 @@ function pg_create_index_query_v2 (self, ObjType, type, field, typefield, is_uni
  * @return {Promise.<TResult>}
  */
 function pg_declare_index(self, ObjType, type, field, typefield, is_unique) {
-	var colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
-	var datakey = colname.getMeta('datakey');
-	var field_name = (datakey ? datakey + '.' : '' ) + colname.getMeta('key');
-	var name = pg_create_index_name(self, ObjType, type, field, typefield, is_unique);
+	let colname = _parse_predicate_key(ObjType, {'epoch':false}, field);
+	let datakey = colname.getMeta('datakey');
+	let field_name = (datakey ? datakey + '.' : '' ) + colname.getMeta('key');
+	let name = pg_create_index_name(self, ObjType, type, field, typefield, is_unique);
 	return pg_relation_exists(self, name).then(function(exists) {
 		if(!exists) {
 			return pg_create_index(self, ObjType, type, field, typefield, is_unique);
 		}
 
 		return pg_get_indexdef(self, name).then(function(old_indexdef) {
-			var new_indexdef_v1 = pg_create_index_query_v1(self, ObjType, type, field, typefield, is_unique);
-			var new_indexdef_v2 = pg_create_index_query_v2(self, ObjType, type, field, typefield, is_unique);
+			let new_indexdef_v1 = pg_create_index_query_v1(self, ObjType, type, field, typefield, is_unique);
+			let new_indexdef_v2 = pg_create_index_query_v2(self, ObjType, type, field, typefield, is_unique);
 
 			if (new_indexdef_v1 === old_indexdef) return self;
 			if (new_indexdef_v2 === old_indexdef) return self;
@@ -1642,7 +1653,7 @@ NoPg._getObjectType = function(doc) {
  * @return {*}
  */
 NoPg.getObjectType = function(doc) {
-	var ObjType = NoPg._getObjectType(doc);
+	let ObjType = NoPg._getObjectType(doc);
 	if(!ObjType) {
 		throw new TypeError("doc is unknown type: {" + typeof doc + "} " + JSON.stringify(doc, null, 2) );
 	}
@@ -1653,10 +1664,10 @@ NoPg.getObjectType = function(doc) {
  * @param data
  */
 NoPg.prototype._record_sample = function(data) {
-	var self = this;
+	let self = this;
 
-	var stats_enabled = is.array(self._stats);
-	var log_times = process.env.DEBUG_NOPG_EVENT_TIMES !== undefined;
+	let stats_enabled = is.array(self._stats);
+	let log_times = process.env.DEBUG_NOPG_EVENT_TIMES !== undefined;
 
 	if( (!stats_enabled) && (!log_times) ) {
 		return;
@@ -1685,17 +1696,17 @@ NoPg.prototype._record_sample = function(data) {
 
 /** Record internal timing statistic object */
 NoPg.prototype._finish_samples = function() {
-	var self = this;
+	let self = this;
 
-	var stats_enabled = is.array(self._stats);
-	var log_times = process.env.NOPG_EVENT_TIMES !== undefined;
+	let stats_enabled = is.array(self._stats);
+	let log_times = process.env.NOPG_EVENT_TIMES !== undefined;
 
 	if( (!stats_enabled) && (!log_times) ) {
 		return;
 	}
 
-	var start = self._stats[0];
-	var end = self._stats[self._stats.length-1];
+	let start = self._stats[0];
+	let end = self._stats[self._stats.length-1];
 
 	debug.assert(start).is('object');
 	debug.assert(start.event).is('string').equals('start');
@@ -1703,7 +1714,7 @@ NoPg.prototype._finish_samples = function() {
 	debug.assert(end).is('object');
 	debug.assert(end.event).is('string');
 
-	var server_duration = 0;
+	let server_duration = 0;
 	ARRAY(self._stats).forEach(function(sample) {
 		server_duration += sample.duration;
 	});
@@ -1730,10 +1741,10 @@ NoPg.prototype._finish_samples = function() {
  */
 function pg_query(query, params) {
 	return function(db) {
-		var start_time = new Date();
+		let start_time = new Date();
 		return do_query(db, query, params).then(function() {
 
-			var end_time = new Date();
+			let end_time = new Date();
 
 			db._record_sample({
 				'event': 'query',
@@ -1763,7 +1774,7 @@ function create_watchdog(db, opts) {
 	opts.timeout = opts.timeout || 30000;
 	debug.assert(opts.timeout).is('number');
 
-	var w = {};
+	let w = {};
 	w.db = db;
 	w.opts = opts;
 
@@ -1773,7 +1784,7 @@ function create_watchdog(db, opts) {
 		debug.warn('Got timeout.');
 		w.timeout = undefined;
 		Q.fcall(function() {
-			var tr_open, tr_commit, tr_rollback, state, tr_unknown, tr_disconnect;
+			let tr_open, tr_commit, tr_rollback, state, tr_unknown, tr_disconnect;
 
 			// NoPg instance
 			if(w.db === undefined) {
@@ -1856,7 +1867,7 @@ NoPg.defaults.pgconfig = PGCONFIG;
 /** The timeout for transactions to auto rollback. If this is `0`, there will be no timeout. If it is `undefined`, the
  * default timeout of 30 seconds will be used.
  */
-var NOPG_TIMEOUT = process.env.NOPG_TIMEOUT;
+let NOPG_TIMEOUT = process.env.NOPG_TIMEOUT;
 
 /** The default timeout for transactions to automatically rollback. If this is `undefined`, there will be no timeout.
  * Defaults to 30 seconds.
@@ -1891,10 +1902,10 @@ if(process.env.NOPG_TYPE_AWARENESS !== undefined) {
  */
 NoPg.start = function(pgconfig, opts) {
 	return extend.promise( [NoPg], nr_fcall("nopg:start", function() {
-		var start_time = new Date();
-		var w;
+		let start_time = new Date();
+		let w;
 
-		var args = ARRAY([pgconfig, opts]);
+		let args = ARRAY([pgconfig, opts]);
 		pgconfig = args.find(is.string);
 		opts = args.find(is.object);
 		debug.assert(opts).ignore(undefined).is('object');
@@ -1909,7 +1920,7 @@ NoPg.start = function(pgconfig, opts) {
 			pgconfig = opts.pgconfig || NoPg.defaults.pgconfig;
 		}
 
-		var timeout = opts.timeout || NoPg.defaults.timeout;
+		let timeout = opts.timeout || NoPg.defaults.timeout;
 		debug.assert(timeout).ignore(undefined).is('number');
 		debug.assert(pgconfig).is('string');
 
@@ -1919,9 +1930,9 @@ NoPg.start = function(pgconfig, opts) {
 			if(timeout !== undefined) {
 				w = create_watchdog(db, {"timeout": timeout});
 			}
-			var nopg_db = new NoPg(db);
+			let nopg_db = new NoPg(db);
 
-			var end_time = new Date();
+			let end_time = new Date();
 			nopg_db._record_sample({
 				'event': 'start',
 				'start': start_time,
@@ -1948,9 +1959,9 @@ NoPg.start = function(pgconfig, opts) {
  */
 NoPg.connect = function(pgconfig, opts) {
 	return extend.promise( [NoPg], nr_fcall("nopg:connect", function() {
-		var start_time = new Date();
+		let start_time = new Date();
 
-		var args = ARRAY([pgconfig, opts]);
+		let args = ARRAY([pgconfig, opts]);
 		pgconfig = args.find(is.string);
 		opts = args.find(is.object);
 		debug.assert(opts).ignore(undefined).is('object');
@@ -1968,8 +1979,8 @@ NoPg.connect = function(pgconfig, opts) {
 
 		return pg.connect(pgconfig).then(function(db) {
 			if(!db) { throw new TypeError("invalid db: " + util.inspect(db) ); }
-			var nopg_db = new NoPg(db);
-			var end_time = new Date();
+			let nopg_db = new NoPg(db);
+			let end_time = new Date();
 			nopg_db._record_sample({
 				'event': 'connect',
 				'start': start_time,
@@ -1994,7 +2005,7 @@ NoPg.connect = function(pgconfig, opts) {
  */
 NoPg.transaction = function(pgconfig, opts, fn) {
 	return extend.promise( [NoPg], nr_fcall("nopg:transaction", function() {
-		var args = ARRAY([pgconfig, opts, fn]);
+		let args = ARRAY([pgconfig, opts, fn]);
 		pgconfig = args.find(is.string);
 		opts = args.find(is.object);
 		fn = args.find(is.func);
@@ -2003,7 +2014,7 @@ NoPg.transaction = function(pgconfig, opts, fn) {
 		debug.assert(opts).ignore(undefined).is('object');
 		debug.assert(fn).is('function');
 
-		var _db;
+		let _db;
 		return NoPg.start(pgconfig, opts).then(function(db) {
 			_db = db;
 			return db;
@@ -2045,8 +2056,8 @@ NoPg.prototype.fetch = function() {
  * @returns {* | undefined} The first value in the array or otherwise `undefined`
  */
 NoPg.prototype.fetchSingle = function() {
-	var db = this;
-	var items = db.fetch();
+	let db = this;
+	let items = db.fetch();
 	debug.assert(items).is('array').maxLength(1);
 	return items.shift();
 };
@@ -2056,8 +2067,8 @@ NoPg.prototype.fetchSingle = function() {
  * @returns The first value in the array or otherwise `undefined`
  */
 NoPg.prototype.fetchFirst = function() {
-	var db = this;
-	var items = db.fetch();
+	let db = this;
+	let items = db.fetch();
 	debug.assert(items).is('array');
 	if(items.length >= 2) {
 		debug.warn('nopg.fetchSingle() got an array with too many results (' + items.length + ')');
@@ -2085,11 +2096,11 @@ NoPg.prototype._getLastValue = function() {
  * @return {*}
  */
 NoPg.prototype.commit = function() {
-	var self = this;
-	var start_time = new Date();
+	let self = this;
+	let start_time = new Date();
 	return extend.promise( [NoPg], nr_fcall("nopg:commit", function() {
 		return self._db.commit().then(function() {
-			var end_time = new Date();
+			let end_time = new Date();
 			self._record_sample({
 				'event': 'commit',
 				'start': start_time,
@@ -2112,11 +2123,11 @@ NoPg.prototype.commit = function() {
  * @return {*}
  */
 NoPg.prototype.rollback = function() {
-	var self = this;
-	var start_time = new Date();
+	let self = this;
+	let start_time = new Date();
 	return extend.promise( [NoPg], nr_fcall("nopg:rollback", function() {
 		return self._db.rollback().then(function() {
-			var end_time = new Date();
+			let end_time = new Date();
 			self._record_sample({
 				'event': 'rollback',
 				'start': start_time,
@@ -2140,11 +2151,11 @@ NoPg.prototype.rollback = function() {
  * @return {*}
  */
 NoPg.prototype.disconnect = function() {
-	var self = this;
-	var start_time = new Date();
+	let self = this;
+	let start_time = new Date();
 	return extend.promise( [NoPg], nr_fcall("nopg:disconnect", function() {
 		return self._db.disconnect().then(function() {
-			var end_time = new Date();
+			let end_time = new Date();
 			self._record_sample({
 				'event': 'disconnect',
 				'start': start_time,
@@ -2181,9 +2192,9 @@ NoPg.createTriggerQueriesForType = function create_tcn_queries(type, op) {
 	}
 	op = op.toLowerCase();
 
-	var table_name = 'documents';
-	var trigger_name = table_name + '_' + op + '_' + type + '_tcn_trigger';
-	var channel_name = 'tcn' + type.toLowerCase();
+	let table_name = 'documents';
+	let trigger_name = table_name + '_' + op + '_' + type + '_tcn_trigger';
+	let channel_name = 'tcn' + type.toLowerCase();
 
 	if(op === 'insert') {
 		return [
@@ -2242,7 +2253,7 @@ NoPg.createTriggerQueriesForType = function create_tcn_queries(type, op) {
  * @return {*}
  */
 NoPg.prototype.setupTriggersForType = function(type) {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:setupTriggersForType", function() {
 		return ARRAY(NoPg.createTriggerQueriesForType(type)).map(function step_builder(query) {
 			return function step() {
@@ -2255,7 +2266,7 @@ NoPg.prototype.setupTriggersForType = function(type) {
 };
 
 /** {object:string} Maps `<table>,<I|U|D>` into NoPg event name */
-var tcn_event_mapping = {
+let tcn_event_mapping = {
 	'documents,I': 'create',
 	'documents,U': 'update',
 	'documents,D': 'delete',
@@ -2277,12 +2288,12 @@ var tcn_event_mapping = {
 };
 
 /** {array:string} Each tcn event name */
-var tcn_event_names = Object.keys(tcn_event_mapping).map(function(key) {
+let tcn_event_names = Object.keys(tcn_event_mapping).map(function(key) {
 	return tcn_event_mapping[key];
 });
 
 /** {array:string} Internal event names used by local NoPg connection */
-var local_event_names = [
+let local_event_names = [
 	'timeout',
 	'commit',
 	'rollback',
@@ -2326,13 +2337,13 @@ NoPg.stringifyEventName = function parse_event_name(event) {
 	debug.assert(event.name).ignore(undefined).is('string');
 	debug.assert(event.id).ignore(undefined).is('string');
 
-	var has_name = event.hasOwnProperty('name');
+	let has_name = event.hasOwnProperty('name');
 
 	if(has_name && NoPg.isLocalEventName(event.name) ) {
 		return event.name;
 	}
 
-	var name = '';
+	let name = '';
 	if(event.hasOwnProperty('type')) {
 		name += event.type + '#';
 	}
@@ -2357,14 +2368,14 @@ NoPg.parseEventName = function parse_event_name(name) {
 
 	return merge.apply(undefined, ARRAY(name.replace(/([#@])/g, "$1\n").split("\n")).map(function(arg) {
 		arg = arg.trim();
-		var key;
-		var is_type = arg[arg.length-1] === '#';
-		var is_id = arg[arg.length-1] === '@';
+		let key;
+		let is_type = arg[arg.length-1] === '#';
+		let is_id = arg[arg.length-1] === '@';
 
 		if(is_type || is_id) {
 			arg = arg.substr(0, arg.length-1).trim();
 			key = is_type ? 'type' : 'id';
-			var result = {};
+			let result = {};
 			result[key] = arg;
 			return result;
 		}
@@ -2410,35 +2421,35 @@ NoPg.parseTCNPayload = function nopg_parse_tcn_payload(payload) {
 
 	debug.assert(payload).is('string');
 
-	var parts = payload.split(',');
+	let parts = payload.split(',');
 
-	var table = parts.shift(); // eg. `"documents"`
+	let table = parts.shift(); // eg. `"documents"`
 	debug.assert(table).is('string').minLength(2);
 	debug.assert(table.charAt(0)).equals('"');
 	debug.assert(table.charAt(table.length-1)).equals('"');
 	table = table.substr(1, table.length-2);
 
-	var op = parts.shift(); // eg. `I`
+	let op = parts.shift(); // eg. `I`
 	debug.assert(op).is('string');
 
-	var opts = parts.join(','); // eg. `"id"='b6913d79-d37a-5977-94b5-95bdfe5cccda'...`
-	var i = opts.indexOf('=');
+	let opts = parts.join(','); // eg. `"id"='b6913d79-d37a-5977-94b5-95bdfe5cccda'...`
+	let i = opts.indexOf('=');
 	if(i < 0) { throw new TypeError("No primary key!"); }
 
-	var key = opts.substr(0, i); // eg. `"id"`
+	let key = opts.substr(0, i); // eg. `"id"`
 	debug.assert(key).is('string').minLength(2);
 	debug.assert(key.charAt(0)).equals('"');
 	debug.assert(key.charAt(key.length-1)).equals('"');
 	key = key.substr(1, key.length-2);
 
-	var value = opts.substr(i+1); // eg. `'b6913d79-d37a-5977-94b5-95bdfe5cccda'...`
+	let value = opts.substr(i+1); // eg. `'b6913d79-d37a-5977-94b5-95bdfe5cccda'...`
 	debug.assert(value).is('string').minLength(2);
 	debug.assert(value.charAt(0)).equals("'");
 	i = value.indexOf("'", 1);
 	if(i < 0) { throw new TypeError("Parse error! Could not find end of input."); }
 	value = value.substr(1, i-1);
 
-	var keys = {};
+	let keys = {};
 	keys[key] = value;
 
 	return {
@@ -2459,11 +2470,11 @@ function create_tcn_listener(events, when) {
 	debug.assert(when).is('object');
 
 	// Normalize event object back to event name
-	var when_str = NoPg.stringifyEventName(when);
+	let when_str = NoPg.stringifyEventName(when);
 
 	return function tcn_listener(payload) {
 		payload = NoPg.parseTCNPayload(payload);
-		var event = tcn_event_mapping[''+payload.table+','+payload.op];
+		let event = tcn_event_mapping[''+payload.table+','+payload.op];
 
 		if(!event) {
 			debug.warn('Could not find event name for payload: ', payload);
@@ -2488,7 +2499,7 @@ function create_tcn_listener(events, when) {
  * @return {*}
  */
 NoPg.prototype.setupTCN = function() {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:setupTCN", function() {
 
 		// Only setup TCN once
@@ -2499,10 +2510,10 @@ NoPg.prototype.setupTCN = function() {
 		self._tcn_setup = true;
 
 		/** {object:number} An object which contains counters by normalized event name. The counts how many times we are listening specific channel, so we can stop listening it when the counter goes 0. */
-		var counter = {};
+		let counter = {};
 
 		/* Listeners for each normalized event name */
-		var tcn_listeners = {};
+		let tcn_listeners = {};
 
 		/** Listener for new listeners */
 		function new_listener(event/*, listener*/) {
@@ -2515,9 +2526,9 @@ NoPg.prototype.setupTCN = function() {
 			event = NoPg.parseEventName(event);
 
 			// Stringifying back the event normalizes the original event name
-			var event_name = NoPg.stringifyEventName(event);
+			let event_name = NoPg.stringifyEventName(event);
 
-			var channel_name = NoPg.parseTCNChannelName(event);
+			let channel_name = NoPg.parseTCNChannelName(event);
 
 			// If we are already listening, just increase the counter.
 			if(counter.hasOwnProperty(event_name)) {
@@ -2526,7 +2537,7 @@ NoPg.prototype.setupTCN = function() {
 			}
 
 			// Create the listener if necessary
-			var tcn_listener;
+			let tcn_listener;
 			if(!tcn_listeners.hasOwnProperty(event_name)) {
 				tcn_listener = tcn_listeners[event_name] = create_tcn_listener(self._events, event);
 			} else {
@@ -2550,9 +2561,9 @@ NoPg.prototype.setupTCN = function() {
 			event = NoPg.parseEventName(event);
 
 			// Stringifying back the event normalizes the original event name
-			var event_name = NoPg.stringifyEventName(event);
+			let event_name = NoPg.stringifyEventName(event);
 
-			var channel_name = NoPg.parseTCNChannelName(event);
+			let channel_name = NoPg.parseTCNChannelName(event);
 
 			counter[event_name] -= 1;
 			if(counter[event_name] === 0) {
@@ -2572,7 +2583,7 @@ NoPg.prototype.setupTCN = function() {
 /** Build wrappers for event methods */
 ['addListener', 'on', 'once', 'removeListener'].forEach(function(fn) {
 	NoPg.prototype[fn] = function(event, listener) {
-		var self = this;
+		let self = this;
 		return extend.promise( [NoPg], nr_fcall("nopg:"+fn, function() {
 			return Q.fcall(function() {
 				event = NoPg.parseEventName(event);
@@ -2602,11 +2613,11 @@ NoPg.prototype.setupTCN = function() {
  * @return {*}
  */
 NoPg.prototype.testServerVersion = function() {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:testServerVersion", function() {
 		return do_query(self, 'show server_version_num').then(function(rows) {
 			//debug.log('PostgreSQL server version (before parse): ', rows);
-			var num = rows.shift().server_version_num;
+			let num = rows.shift().server_version_num;
 			num = parseInt(num, 10);
 			//debug.log('PostgreSQL server version: ', num);
 			if(num >= 90300) {
@@ -2623,11 +2634,11 @@ NoPg.prototype.testServerVersion = function() {
  * @return {*}
  */
 NoPg.prototype.testExtension = function(name) {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:testExtension", function() {
 		return do_query(self, 'SELECT COUNT(*) AS count FROM pg_catalog.pg_extension WHERE extname = $1', [name]).then(function(rows) {
-			var row = rows.shift();
-			var count = parseInt(row.count, 10);
+			let row = rows.shift();
+			let count = parseInt(row.count, 10);
 			if(count === 1) {
 				return self;
 			} else {
@@ -2641,7 +2652,7 @@ NoPg.prototype.testExtension = function(name) {
  * @return {*}
  */
 NoPg.prototype.test = function() {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:test", function() {
 		return self.testServerVersion().testExtension('plv8').testExtension('uuid-ossp').testExtension('moddatetime').testExtension('tcn');
 	}));
@@ -2653,7 +2664,7 @@ NoPg.prototype.test = function() {
  * @return {string}
  */
 function pad(num, size) {
-	var s = num+"";
+	let s = num+"";
 	while (s.length < size) {
 		s = "0" + s;
 	}
@@ -2672,18 +2683,18 @@ function push_file (builders, file) {
  * @return {*}
  */
 NoPg.prototype.init = function() {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:init", function() {
 
 		return self.test().latestDBVersion().then(function(db) {
-			var code_version = require('./schema/latest.js');
-			var db_version = db.fetch();
+			let code_version = require('./schema/latest.js');
+			let db_version = db.fetch();
 			if(! ((db_version >= -1) && (db_version<=code_version)) ) {
 				throw new TypeError("Database version " + db_version + " is not between accepted range (-1 .. " + code_version + ")");
 			}
-			var builders = [];
+			let builders = [];
 
-			var i = db_version, file;
+			let i = db_version, file;
 			while(i < code_version) {
 				i += 1;
 				file = './schema/v' + pad(i, 4) + '.js';
@@ -2727,7 +2738,7 @@ NoPg.prototype.init = function() {
  * @return {create2}
  */
 NoPg.prototype.create = function(type) {
-	var self = this;
+	let self = this;
 
 	function create2(data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:create", function() {
@@ -2745,7 +2756,7 @@ NoPg.prototype.create = function(type) {
 				});
 			}
 
-			var builder;
+			let builder;
 			if(self._documentBuilders && is.string(type) && self._documentBuilders.hasOwnProperty(type) && is.func(self._documentBuilders[type])) {
 				builder = self._documentBuilders[type];
 			} else if(self._documentBuilders && type && is.string(type.$name) && self._documentBuilders.hasOwnProperty(type.$name) && is.func(self._documentBuilders[type.$name])) {
@@ -2770,7 +2781,7 @@ NoPg.prototype.create = function(type) {
  * @return {Promise.<TResult>}
  */
 NoPg.prototype._addDBVersion = function(data) {
-	var self = this;
+	let self = this;
 	return do_insert(self, NoPg.DBVersion, data).then(_get_result(NoPg.DBVersion));
 };
 
@@ -2779,8 +2790,8 @@ NoPg.prototype._addDBVersion = function(data) {
  * @return {search2}
  */
 NoPg.prototype.search = function(type) {
-	var self = this;
-	var ObjType = NoPg.Document;
+	let self = this;
+	let ObjType = NoPg.Document;
 	function search2(opts, traits) {
 		return extend.promise( [NoPg], nr_fcall("nopg:search", function() {
 			return do_select(self, [ObjType, type], opts, traits).then(save_result_to_queue(self)).then(function() { return self; });
@@ -2794,8 +2805,8 @@ NoPg.prototype.search = function(type) {
  * @return {count2}
  */
 NoPg.prototype.count = function(type) {
-	var self = this;
-	var ObjType = NoPg.Document;
+	let self = this;
+	let ObjType = NoPg.Document;
 	function count2(opts, traits) {
 		return extend.promise( [NoPg], nr_fcall("nopg:count", function() {
 			traits = merge(traits, {'count':true, 'order':null});
@@ -2810,8 +2821,8 @@ NoPg.prototype.count = function(type) {
  * @return {searchSingle2}
  */
 NoPg.prototype.searchSingle = function(type) {
-	var self = this;
-	var ObjType = NoPg.Document;
+	let self = this;
+	let ObjType = NoPg.Document;
 	function searchSingle2(opts, traits) {
 		return extend.promise( [NoPg], nr_fcall("nopg:search", function() {
 			return do_select(self, [ObjType, type], opts, traits)
@@ -2829,8 +2840,8 @@ NoPg.prototype.searchSingle = function(type) {
  * @return {Promise.<TResult>}
  */
 NoPg.prototype._update = function(obj, data) {
-	var self = this;
-	var ObjType = NoPg._getObjectType(obj) || NoPg.Document;
+	let self = this;
+	let ObjType = NoPg._getObjectType(obj) || NoPg.Document;
 	return do_update(self, ObjType, obj, data).then(_get_result(ObjType));
 };
 
@@ -2840,11 +2851,11 @@ NoPg.prototype._update = function(obj, data) {
  * @return {*}
  */
 NoPg.prototype.update = function(obj, data) {
-	var self = this;
-	var ObjType = NoPg._getObjectType(obj) || NoPg.Document;
+	let self = this;
+	let ObjType = NoPg._getObjectType(obj) || NoPg.Document;
 	return extend.promise( [NoPg], nr_fcall("nopg:update", function() {
 
-		var builder;
+		let builder;
 		if(self._documentBuilders && obj && is.string(obj.$type) && self._documentBuilders.hasOwnProperty(obj.$type) && is.func(self._documentBuilders[obj.$type])) {
 			builder = self._documentBuilders[obj.$type];
 		}
@@ -2865,8 +2876,8 @@ NoPg.prototype.update = function(obj, data) {
  */
 NoPg.prototype.del = function(obj) {
 	if(!obj.$id) { throw new TypeError("opts.$id invalid: " + util.inspect(obj) ); }
-	var self = this;
-	var ObjType = NoPg._getObjectType(obj) || NoPg.Document;
+	let self = this;
+	let ObjType = NoPg._getObjectType(obj) || NoPg.Document;
 	return extend.promise( [NoPg], nr_fcall("nopg:del", function() {
 		return do_delete(self, ObjType, obj).then(function() { return self; });
 	}));
@@ -2877,7 +2888,7 @@ NoPg.prototype['delete'] = NoPg.prototype.del;
 /** Delete type */
 NoPg.prototype.delType = function(name) {
 	debug.assert(name).is('string');
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:delType", function() {
 		return self._getType(name).then(function(type) {
 			if(!(type instanceof NoPg.Type)) {
@@ -2892,7 +2903,7 @@ NoPg.prototype.deleteType = NoPg.prototype.delType;
 
 /** Create a new type. We recommend using `._declareType()` instead unless you want an error if the type exists already. Use like `db._createType([TYPE-NAME])([OPT(S)])`. Returns the result instead of saving it to `self` queue. */
 NoPg.prototype._createType = function(name) {
-	var self = this;
+	let self = this;
 	debug.assert(name).ignore(undefined).is('string');
 	function createType2(data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:_createType", function() {
@@ -2916,7 +2927,7 @@ NoPg.prototype._createType = function(name) {
 
 /** Create a new type. We recommend using `.declareType()` instead unless you want an error if the type exists already. Use like `db.createType([TYPE-NAME])([OPT(S)])`. */
 NoPg.prototype.createType = function(name) {
-	var self = this;
+	let self = this;
 	function createType2(data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:createType", function() {
 			return self._createType(name)(data).then(save_result_to(self));
@@ -2929,8 +2940,8 @@ NoPg.prototype.createType = function(name) {
 NoPg.prototype.declareType = function(name, opts) {
 	opts = opts || {};
 	debug.assert(opts).is('object');
-	var opts_declare_indexes = opts.hasOwnProperty('declareIndexes') ? (opts.declareIndexes === true) : true;
-	var self = this;
+	let opts_declare_indexes = opts.hasOwnProperty('declareIndexes') ? (opts.declareIndexes === true) : true;
+	let self = this;
 	function declareType2(data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:declareType", function() {
 			data = data || {};
@@ -2938,10 +2949,10 @@ NoPg.prototype.declareType = function(name, opts) {
 			debug.assert(data).is('object');
 			debug.assert(data.indexes).ignore(undefined).is('array');
 			debug.assert(data.uniqueIndexes).ignore(undefined).is('array');
-			var indexes = data.indexes || [];
-			var uniqueIndexes = data.uniqueIndexes || [];
+			let indexes = data.indexes || [];
+			let uniqueIndexes = data.uniqueIndexes || [];
 
-			var where = {};
+			let where = {};
 			if(name !== undefined) {
 				if(name instanceof NoPg.Type) {
 					where.$types_id = name.$id;
@@ -2986,7 +2997,7 @@ NoPg.prototype.declareType = function(name, opts) {
 					return self.push(type);
 				}
 
-				//var type = self.fetch();
+				//let type = self.fetch();
 				return indexes.map(function build_step(index) {
 					return function step() {
 						return pg_declare_index(self, NoPg.Document, type, index).then(function() {
@@ -3009,8 +3020,8 @@ NoPg.prototype.declareType = function(name, opts) {
 /** Delete method */
 NoPg.prototype.delMethod = function(type) {
 	debug.assert(type).is('string');
-	var self = this;
-	var self_get_method = self._getMethod(type);
+	let self = this;
+	let self_get_method = self._getMethod(type);
 	return function(name) {
 		debug.assert(name).is('string');
 		return extend.promise( [NoPg], nr_fcall("nopg:delMethod", function() {
@@ -3028,8 +3039,8 @@ NoPg.prototype.deleteMethod = NoPg.prototype.delMethod;
 
 /** Search methods */
 NoPg.prototype._searchMethods = function(type) {
-	var self = this;
-	var ObjType = NoPg.Method;
+	let self = this;
+	let ObjType = NoPg.Method;
 	debug.assert(type).is('string');
 	return function nopg_prototype_search_methods_(opts, traits) {
 		debug.assert(opts).ignore(undefined).is('object');
@@ -3044,9 +3055,9 @@ NoPg.prototype._searchMethods = function(type) {
 
 /** Search methods */
 NoPg.prototype.searchMethods = function(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
-	var self_search_methods = self._searchMethods(type);
+	let self_search_methods = self._searchMethods(type);
 	return function nopg_prototype_search_methods_(opts, traits) {
 		return extend.promise( [NoPg], nr_fcall("nopg:searchMethods", function() {
 			return self_search_methods(opts, traits).then(save_result_to_queue(self)).then(function() { return self; });
@@ -3056,16 +3067,16 @@ NoPg.prototype.searchMethods = function(type) {
 
 /** Get active method if it exists */
 NoPg.prototype._getMethod = function nopg_prototype_get_method(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
 	return function nopg_prototype_get_method_(name) {
 		debug.assert(name).is('string');
-		var where = {
+		let where = {
 			'$type': type,
 			'$name': name,
 			'$active': true
 		};
-		var traits = {
+		let traits = {
 			'order': ['$created']
 		};
 		return do_select(self, NoPg.Method, where, traits).then(_get_result(NoPg.Method));
@@ -3074,7 +3085,7 @@ NoPg.prototype._getMethod = function nopg_prototype_get_method(type) {
 
 /** Create a new method. We recommend using `._declareMethod()` instead of this unless you want an error if the method exists already. Use like `db._createMethod([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`. Returns the result instead of saving it to `self` queue. */
 NoPg.prototype._createMethod = function(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
 	function createMethod2(name, body, data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:_createMethod", function() {
@@ -3105,8 +3116,8 @@ NoPg.prototype._createMethod = function(type) {
 
 /** Create a new method. We recommend using `.declareMethod()` instead unless you want an error if the type exists already. Use like `db.createMethod([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`. */
 NoPg.prototype.createMethod = function(type) {
-	var self = this;
-	var self_create_method = self._createMethod(type);
+	let self = this;
+	let self_create_method = self._createMethod(type);
 	function createMethod2(name, body, data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:createMethod", function() {
 			return self_create_method(name, body, data).then(save_result_to(self));
@@ -3117,7 +3128,7 @@ NoPg.prototype.createMethod = function(type) {
 
 /** Create a new method or replace existing with new values. Use like `db.declareMethod([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`. */
 NoPg.prototype.declareMethod = function(type) {
-	var self = this;
+	let self = this;
 	function declareMethod2(name, body, data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:declareMethod", function() {
 
@@ -3147,9 +3158,9 @@ NoPg.prototype.declareMethod = function(type) {
 
 /** Returns a document builder function */
 NoPg.prototype._createDocumentBuilder = function nopg_prototype_create_document_builder(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
-	var self_search_methods = self._searchMethods(type);
+	let self_search_methods = self._searchMethods(type);
 	return function nopg_prototype_create_document_builder_() {
 		return self_search_methods({'$active': true}).then(function(methods) {
 
@@ -3196,9 +3207,9 @@ NoPg.prototype._createDocumentBuilder = function nopg_prototype_create_document_
 
 /** Returns a document builder function */
 NoPg.prototype.createDocumentBuilder = function(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
-	var self_create_document_builder = self._createDocumentBuilder(type);
+	let self_create_document_builder = self._createDocumentBuilder(type);
 	return function nopg_prototype_create_document_builder_() {
 		return extend.promise( [NoPg], nr_fcall("nopg:createDocumentBuilder", function() {
 			return self_create_document_builder().then(save_result_to_queue(self)).then(function() { return self; });
@@ -3208,12 +3219,12 @@ NoPg.prototype.createDocumentBuilder = function(type) {
 
 /** Setups a document builder function in session cache */
 NoPg.prototype._initDocumentBuilder = function nopg_prototype_init_document_builder(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
 	if(!self._documentBuilders) {
 		self._documentBuilders = {};
 	}
-	var create_document_builder = self._createDocumentBuilder(type);
+	let create_document_builder = self._createDocumentBuilder(type);
 	return function nopg_prototype_init_document_builder_() {
 		if(self._documentBuilders.hasOwnProperty(type)) {
 			return self;
@@ -3227,9 +3238,9 @@ NoPg.prototype._initDocumentBuilder = function nopg_prototype_init_document_buil
 
 /** Setups a document builder function in session cache */
 NoPg.prototype.initDocumentBuilder = function(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
-	var self_init_document_builder = self._initDocumentBuilder(type);
+	let self_init_document_builder = self._initDocumentBuilder(type);
 	return function nopg_prototype_init_document_builder_() {
 		return extend.promise( [NoPg], nr_fcall("nopg:initDocumentBuilder", function() {
 			return self_init_document_builder();
@@ -3244,8 +3255,8 @@ NoPg.prototype.initDocumentBuilder = function(type) {
 /** Delete view */
 NoPg.prototype.delView = function(type) {
 	debug.assert(type).is('string');
-	var self = this;
-	var self_get_view = self._getView(type);
+	let self = this;
+	let self_get_view = self._getView(type);
 	return function(name) {
 		debug.assert(name).is('string');
 		return extend.promise( [NoPg], nr_fcall("nopg:delView", function() {
@@ -3263,8 +3274,8 @@ NoPg.prototype.deleteView = NoPg.prototype.delView;
 
 /** Search views */
 NoPg.prototype._searchViews = function(type) {
-	var self = this;
-	var ObjType = NoPg.View;
+	let self = this;
+	let ObjType = NoPg.View;
 	debug.assert(type).is('string');
 	return function nopg_prototype_search_views_(opts, traits) {
 		debug.assert(opts).ignore(undefined).is('object');
@@ -3276,9 +3287,9 @@ NoPg.prototype._searchViews = function(type) {
 
 /** Search views */
 NoPg.prototype.searchViews = function(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
-	var self_search_views = self._searchViews(type);
+	let self_search_views = self._searchViews(type);
 	return function nopg_prototype_search_views_(opts, traits) {
 		return extend.promise( [NoPg], nr_fcall("nopg:searchViews", function() {
 			return self_search_views(opts, traits).then(save_result_to_queue(self)).then(function() { return self; });
@@ -3288,9 +3299,9 @@ NoPg.prototype.searchViews = function(type) {
 
 /** Get view */
 NoPg.prototype.getView = function(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
-	var self_get_view = self._getView(type);
+	let self_get_view = self._getView(type);
 	return function nopg_prototype_get_view_(opts, traits) {
 		return extend.promise( [NoPg], nr_fcall("nopg:getView", function() {
 			return self_get_view(opts, traits).then(save_result_to_queue(self)).then(function() { return self; });
@@ -3300,15 +3311,15 @@ NoPg.prototype.getView = function(type) {
 
 /** Get active view if it exists */
 NoPg.prototype._getView = function nopg_prototype_get_view(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
 	return function nopg_prototype_get_view_(name) {
 		debug.assert(name).is('string');
-		var where = {
+		let where = {
 			'$type': type,
 			'$name': name
 		};
-		var traits = {
+		let traits = {
 			'order': ['$created']
 		};
 		return do_select(self, NoPg.View, where, traits).then(_get_result(NoPg.View));
@@ -3317,7 +3328,7 @@ NoPg.prototype._getView = function nopg_prototype_get_view(type) {
 
 /** Create a new view. We recommend using `._declareView()` instead of this unless you want an error if the view exists already. Use like `db._createView([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`. Returns the result instead of saving it to `self` queue. */
 NoPg.prototype._createView = function(type) {
-	var self = this;
+	let self = this;
 	debug.assert(type).is('string');
 	function createView2(name, data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:_createView", function() {
@@ -3343,8 +3354,8 @@ NoPg.prototype._createView = function(type) {
 
 /** Create a new view. We recommend using `.declareView()` instead unless you want an error if the type exists already. Use like `db.createView([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`. */
 NoPg.prototype.createView = function(type) {
-	var self = this;
-	var self_create_view = self._createView(type);
+	let self = this;
+	let self_create_view = self._createView(type);
 	function createView2(name, data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:createView", function() {
 			return self_create_view(name, data).then(save_result_to(self));
@@ -3355,7 +3366,7 @@ NoPg.prototype.createView = function(type) {
 
 /** Create a new view or replace existing with new values. Use like `db.declareView([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`. */
 NoPg.prototype.declareView = function(type) {
-	var self = this;
+	let self = this;
 	function declareView2(name, data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:declareView", function() {
 
@@ -3387,7 +3398,7 @@ NoPg.prototype.declareView = function(type) {
 
 /** Create a new type or replace existing type with the new values. Use like `db.declareType([TYPE-NAME])([OPT(S)])`. */
 NoPg.prototype.declareIndexes = function(name) {
-	var self = this;
+	let self = this;
 	function declareIndexes2(data) {
 		return extend.promise( [NoPg], nr_fcall("nopg:declareIndexes", function() {
 			data = data || {};
@@ -3395,8 +3406,8 @@ NoPg.prototype.declareIndexes = function(name) {
 			debug.assert(data.indexes).ignore(undefined).is('array');
 			debug.assert(data.uniqueIndexes).ignore(undefined).is('array');
 
-			var indexes = data.indexes || [];
-			var uniqueIndexes = data.uniqueIndexes || [];
+			let indexes = data.indexes || [];
+			let uniqueIndexes = data.uniqueIndexes || [];
 
 			if(uniqueIndexes.length >= 1) {
 				ARRAY(uniqueIndexes).forEach(function(i) {
@@ -3422,7 +3433,7 @@ NoPg.prototype.declareIndexes = function(name) {
 				return self;
 			}
 
-			var where = {};
+			let where = {};
 			if(name !== undefined) {
 				if(name instanceof NoPg.Type) {
 					where.$types_id = name.$id;
@@ -3456,7 +3467,7 @@ NoPg.prototype.createOrReplaceType = function(name) {
 
 /** Tests if type exists */
 NoPg.prototype._typeExists = function(name) {
-	var self = this;
+	let self = this;
 	if(is.string(name) && self._cache.types.hasOwnProperty(name)) {
 		return true;
 	}
@@ -3467,7 +3478,7 @@ NoPg.prototype._typeExists = function(name) {
 
 /** Tests if lib exists */
 NoPg.prototype._libExists = function(name) {
-	var self = this;
+	let self = this;
 	return do_select(self, NoPg.Lib, name).then(function(types) {
 		return (types.length >= 1) ? true : false;
 	});
@@ -3475,7 +3486,7 @@ NoPg.prototype._libExists = function(name) {
 
 /** Get type and save it to result queue. */
 NoPg.prototype.typeExists = function(name) {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:typeExists", function() {
 		return self._typeExists(name).then(save_result_to(self));
 	}));
@@ -3486,19 +3497,19 @@ NoPg.prototype.typeExists = function(name) {
  * @param type {object|function} The promise of type object or type object instance
  */
 NoPg.prototype._updateTypeCache = function(name, type) {
-	var self = this;
+	let self = this;
 	debug.assert(name).is('string');
 	if(!is.func(type)) {
 		debug.assert(type).is('object');
 	}
-	var cache = self._cache;
+	let cache = self._cache;
 	debug.assert(cache).is('object');
-	var objects = cache.objects;
+	let objects = cache.objects;
 	debug.assert(objects).is('object');
-	var types = cache.types;
+	let types = cache.types;
 	debug.assert(types).is('object');
-	var cached_type = types[name] = Q.when(type).then(function(result) {
-		var result_id;
+	let cached_type = types[name] = Q.when(type).then(function(result) {
+		let result_id;
 		if(is.obj(result)) {
 			result_id = result.$id;
 			types[name] = result;
@@ -3513,7 +3524,7 @@ NoPg.prototype._updateTypeCache = function(name, type) {
 
 /** Get type directly */
 NoPg.prototype._getType = function(name, traits) {
-	var self = this;
+	let self = this;
 	if(!is.string(name)) {
 		return do_select(self, NoPg.Type, name, traits).then(_get_result(NoPg.Type));
 	}
@@ -3527,7 +3538,7 @@ NoPg.prototype._getType = function(name, traits) {
 
 /** Get type and save it to result queue. */
 NoPg.prototype.getType = function(name) {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:getType", function() {
 		return self._getType(name).then(save_result_to(self));
 	}));
@@ -3542,15 +3553,15 @@ NoPg._escapeFunction = pghelpers.escapeFunction;
  * @private
  */
 function _latestDBVersion(self) {
-	var table = NoPg.DBVersion.meta.table;
+	let table = NoPg.DBVersion.meta.table;
 	return pg_table_exists(self, table).then(function(exists) {
 		if(!exists) {
 			return -1;
 		}
-		var query = 'SELECT COALESCE(MAX(version), 0) AS version FROM ' + table;
+		let query = 'SELECT COALESCE(MAX(version), 0) AS version FROM ' + table;
 		return do_query(self, query).then(function(rows) {
 			if(!(rows instanceof Array)) { throw new TypeError("Unexpected result from rows: " + util.inspect(rows) ); }
-			var obj = rows.shift();
+			let obj = rows.shift();
 			return parseInt(obj.version, 10);
 		});
 	}).then(function(db_version) {
@@ -3563,7 +3574,7 @@ function _latestDBVersion(self) {
 
 /** Returns the latest database server version as a integer number */
 NoPg.prototype.latestDBVersion = function() {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:latestDBVersion", function() {
 		return _latestDBVersion(self).then(save_result_to(self));
 	}));
@@ -3571,7 +3582,7 @@ NoPg.prototype.latestDBVersion = function() {
 
 /** Import javascript file into database as a library by calling `.importLib(FILE, [OPT(S)])` or `.importLib(OPT(S))` with `$content` property. */
 NoPg.prototype._importLib = function(file, opts) {
-	var self = this;
+	let self = this;
 	opts = JSON.parse( JSON.stringify( opts || {} ));
 
 	if( is.obj(file) && (opts === undefined) ) {
@@ -3589,7 +3600,7 @@ NoPg.prototype._importLib = function(file, opts) {
 		throw new TypeError("NoPg.prototype.importLib() called without content or file");
 	}).then(function importLib2(data) {
 		opts.$name = opts.$name || require('path').basename(file, '.js');
-		var name = '' + opts.$name;
+		let name = '' + opts.$name;
 
 		opts['content-type'] = '' + (opts['content-type'] || 'application/javascript');
 		if(data) {
@@ -3610,7 +3621,7 @@ NoPg.prototype._importLib = function(file, opts) {
 
 /** Import javascript file into database as a library by calling `.importLib(FILE, [OPT(S)])` or `.importLib(OPT(S))` with `$content` property. */
 NoPg.prototype.importLib = function(file, opts) {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:importLib", function() {
 		return self._importLib(file, opts).then(_get_result(NoPg.Lib)).then(save_result_to(self));
 	}));
@@ -3618,7 +3629,7 @@ NoPg.prototype.importLib = function(file, opts) {
 
 /** Get specified object directly */
 NoPg.prototype._getObject = function(ObjType) {
-	var self = this;
+	let self = this;
 	return function(opts, traits) {
 		return do_select(self, ObjType, opts, traits).then(_get_result(ObjType));
 	};
@@ -3626,13 +3637,13 @@ NoPg.prototype._getObject = function(ObjType) {
 
 /** Get document directly */
 NoPg.prototype._getDocument = function(opts) {
-	var self = this;
+	let self = this;
 	return self._getObject(NoPg.Document)(opts);
 };
 
 /** Get document and save it to result queue. */
 NoPg.prototype.getDocument = function(opts) {
-	var self = this;
+	let self = this;
 	return extend.promise( [NoPg], nr_fcall("nopg:getDocument", function() {
 		return self._getDocument(opts).then(save_result_to(self));
 	}));
@@ -3640,8 +3651,8 @@ NoPg.prototype.getDocument = function(opts) {
 
 /** Search types */
 NoPg.prototype.searchTypes = function(opts, traits) {
-	var self = this;
-	var ObjType = NoPg.Type;
+	let self = this;
+	let ObjType = NoPg.Type;
 	return extend.promise( [NoPg], nr_fcall("nopg:searchTypes", function() {
 		return do_select(self, ObjType, opts, traits).then(save_result_to_queue(self)).then(function() { return self; });
 	}));
@@ -3653,15 +3664,15 @@ NoPg.prototype.searchTypes = function(opts, traits) {
  *          undefined, then last object in the queue will be used.
  */
 NoPg.prototype.createAttachment = function(doc) {
-	var self = this;
-	var doc_id;
+	let self = this;
+	let doc_id;
 
 	function createAttachment2(file, opts) {
 		return extend.promise( [NoPg], nr_fcall("nopg:createAttachment", function() {
 			return Q.fcall(function() {
 				opts = opts || {};
 
-				var file_is_buffer = false;
+				let file_is_buffer = false;
 
 				try {
 					if(file && is.string(file)) {
@@ -3701,7 +3712,7 @@ NoPg.prototype.createAttachment = function(doc) {
 
 			}).then(function(buffer) {
 
-				var data = {
+				let data = {
 					$documents_id: doc_id,
 					$content: '\\x' + buffer,
 					$meta: opts
@@ -3718,7 +3729,7 @@ NoPg.prototype.createAttachment = function(doc) {
 
 /** Search attachments */
 NoPg.prototype.searchAttachments = function(doc) {
-	var self = this;
+	let self = this;
 
 	function get_documents_id(item) {
 		if(item instanceof NoPg.Document) {
@@ -3737,7 +3748,7 @@ NoPg.prototype.searchAttachments = function(doc) {
 	function searchAttachments2(opts, traits) {
 		return extend.promise( [NoPg], nr_fcall("nopg:searchAttachments", function() {
 
-			var ObjType = NoPg.Attachment;
+			let ObjType = NoPg.Attachment;
 			opts = opts || {};
 
 			if(doc === undefined) {
@@ -3771,4 +3782,5 @@ NoPg.prototype.valueOf = function nopg_prototype_valueof() {
 	return this._db;
 };
 
-/* EOF */
+// Exports
+export default NoPg;
