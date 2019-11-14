@@ -30,30 +30,31 @@ function InsertQuery(opts) {
  */
 InsertQuery.prototype.compile = function() {
 
-	var ObjType = this.ObjType;
+	let ObjType = this.ObjType;
 
-	var data = this._data;
+	let data = this._data;
 
 	data = (new ObjType(data)).valueOf();
 
-	var _get_data = get_data(data);
+	let _get_data = get_data(data);
 
 	// FIXME: These array loops could be joined as one loop. #performance
 
 	// Filter only $-keys which are not the datakey
-	var keys = ARRAY(ObjType.meta.keys).filter(first_letter_is_dollar).map(parse_keyword_name).filter(_get_data);
+	let keys = ARRAY(ObjType.meta.keys).filter(first_letter_is_dollar).map(parse_keyword_name).filter(_get_data);
 
 	if(keys.valueOf().length === 0) { throw new TypeError("No data to submit: keys array is empty."); }
 
-	var query = "INSERT INTO " + (this._table) +
+	let query = "INSERT INTO " + (this._table) +
 	      " ("+ keys.join(', ') +
 	      ") VALUES (" + keys.map(function(k, i) { return '$' + (i+1); }).join(', ') +
 	      ") RETURNING *";
 
-	var params = keys.map(_get_data).valueOf();
+	let params = keys.map(_get_data).valueOf();
 
 	// Return results
 	return {'query':query, 'params': params, 'ObjType': ObjType};
+
 };
 
 // Exports
