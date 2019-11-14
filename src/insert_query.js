@@ -1,11 +1,7 @@
 /** InsertQuery object */
 
-"use strict";
-
 import parse_keyword_name from './parse_keyword_name.js';
 import first_letter_is_dollar from './first_letter_is_dollar.js';
-import debug from '@norjs/debug';
-import ARRAY from 'nor-array';
 
 /** Get function which gets property of data */
 function get_data(data) {
@@ -61,6 +57,4 @@ InsertQuery.prototype.compile = function() {
 };
 
 // Exports
-module.exports = InsertQuery;
-
-/** EOF */
+export default InsertQuery;
