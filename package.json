@@ -34,7 +34,7 @@
     "client"
   ],
   "dependencies": {
-    "@norjs/utils": "^1.0.17",
+    "@norjs/utils": "^1.0.18",
     "@norjs/pg": "^2.0.0",
     "lodash": "^4.17.15",
     "esm": "^3.2.25",
