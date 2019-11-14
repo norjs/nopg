@@ -1034,51 +1034,6 @@ export class NoPgUtils {
         return query;
     }
 
-    /** Internal CREATE INDEX query that will create the index only if the relation does not exists already
-     * @param self
-     * @param ObjType
-     * @param type
-     * @param field
-     * @param typefield
-     * @param is_unique
-     * @return {Promise.<TResult>}
-     */
-    static pg_declare_index(self, ObjType, type, field, typefield, is_unique) {
-
-        let colname = NoPgUtils.parse_predicate_key(ObjType, {'epoch':false}, field);
-
-        let datakey = colname.getMeta('datakey');
-
-        let field_name = (datakey ? datakey + '.' : '' ) + colname.getMeta('key');
-
-        let name = NoPgUtils.pg_create_index_name( ObjType, type, field, typefield, is_unique);
-
-        return pg_relation_exists(self, name).then(function(exists) {
-            if (!exists) {
-                return pg_create_index(self, ObjType, type, field, typefield, is_unique);
-            }
-
-            return pg_get_indexdef(self, name).then(function(old_indexdef) {
-                let new_indexdef_v1 = pg_create_index_query_v1(self, ObjType, type, field, typefield, is_unique);
-                let new_indexdef_v2 = pg_create_index_query_v2(self, ObjType, type, field, typefield, is_unique);
-
-                if (new_indexdef_v1 === old_indexdef) return self;
-                if (new_indexdef_v2 === old_indexdef) return self;
-
-                if (NoPg.debug) {
-                    debug.info('Rebuilding index...');
-                    nrLog.debug('old index is: ', old_indexdef);
-                    nrLog.debug('new index is: ', new_indexdef_v1);
-                }
-
-                return pg_drop_index(self, ObjType, type, field, typefield).then(function() {
-                    return pg_create_index(self, ObjType, type, field, typefield, is_unique);
-                });
-            });
-        });
-
-    }
-
     /** Run query on the PostgreSQL server
      * @param query
      * @param params

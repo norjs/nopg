@@ -1319,15 +1319,15 @@ export class NoPg {
 	 */
 	_pg_drop_index (ObjType, type, field, typefield) {
 
-		let colName = NoPgUtils.parse_predicate_key(ObjType, {'epoch':false}, field);
+		// let colName = NoPgUtils.parse_predicate_key(ObjType, {'epoch':false}, field);
 
-		let datakey = colName.getMeta('datakey');
+		// let datakey = colName.getMeta('datakey');
 
-		let field_name = (datakey ? datakey + '.' : '' ) + colName.getMeta('key');
+		// let field_name = (datakey ? datakey + '.' : '' ) + colName.getMeta('key');
 
-		let name = NoPgUtils.pg_create_index_name( ObjType, type, field, typefield);
+		const name = NoPgUtils.pg_create_index_name( ObjType, type, field, typefield);
 
-		let query = "DROP INDEX IF EXISTS "+name;
+		const query = "DROP INDEX IF EXISTS "+name;
 
 		return this._doQuery(query);
 
@@ -1392,17 +1392,15 @@ export class NoPg {
 
 		const opts_declare_indexes = opts.hasOwnProperty('declareIndexes') ? (opts.declareIndexes === true) : true;
 
-		const self = this;
-
-		function declareType2(data) {
+		return async data => {
 
 			data = data || {};
 
 			AssertUtils.isObject(data);
 
-			if ( data.indexes !== undefined) AssertUtils.isArray(data.indexes);
+			if ( data.indexes !== undefined ) AssertUtils.isArray(data.indexes);
 
-			if ( data.uniqueIndexes !== undefined) AssertUtils.isArray(data.uniqueIndexes);
+			if ( data.uniqueIndexes !== undefined ) AssertUtils.isArray(data.uniqueIndexes);
 
 			let indexes = data.indexes || [];
 
@@ -1410,98 +1408,108 @@ export class NoPg {
 
 			let where = {};
 
-			if (name !== undefined) {
-				if (name instanceof NoPg.Type) {
+			if ( name !== undefined ) {
+				if ( name instanceof NoPg.Type ) {
 					where.$types_id = name.$id;
 				} else {
-					where.$name = ''+name;
+					where.$name = '' + name;
 				}
 			}
 
-			let type = await self._getType(where);
+			let type = await this._getType(where);
 
-			if (type) {
-				type = await self._updateTypeCache(type.$name, self._update(type, data));
+			if ( type ) {
+				type = await this._updateTypeCache(type.$name, this._update(type, data));
 			} else {
-				type = await self._updateTypeCache(name, self._createType(name)(data));
+				type = await this._updateTypeCache(name, this._createType(name)(data));
 			}
 
-			if (!opts_declare_indexes) {
+			if ( !opts_declare_indexes ) {
 
-				self._save_result_to_queue(type);
+				this._save_result_to_queue(type);
 
-				return self;
+				return this;
 
 			}
 
-			if (uniqueIndexes.length >= 1) {
+			if ( uniqueIndexes.length >= 1 ) {
 
 				_.forEach(uniqueIndexes, i => {
-					if (indexes.indexOf(i) < 0) {
+					if ( indexes.indexOf(i) < 0 ) {
 						indexes.push(i);
 					}
 				});
 
 			}
 
-			if (indexes.indexOf('$id') < 0) {
+			if ( indexes.indexOf('$id') < 0 ) {
 				indexes.push('$id');
 			}
 
-			if (indexes.indexOf('$created') < 0) {
+			if ( indexes.indexOf('$created') < 0 ) {
 				indexes.push('$created');
 			}
 
-			if (indexes.indexOf('$modified') < 0) {
+			if ( indexes.indexOf('$modified') < 0 ) {
 				indexes.push('$modified');
 			}
 
-			if (indexes.length === 0) {
+			if ( indexes.length === 0 ) {
 
-				self._save_result_to_queue(type);
+				this._save_result_to_queue(type);
 
-				return self;
+				return this;
 
 			}
 
-			//let type = self.fetch();
 			await _.reduce(
-				_.map(indexes, function build_step(index) {
-					return function step() {
-						return NoPgUtils.pg_declare_index(self, NoPg.Document, type, index).then(() => NoPgUtils.pg_declare_index(self, NoPg.Document, type, index, "types_id", uniqueIndexes.indexOf(index) >= 0)).then(() => pg_declare_index(self, NoPg.Document, type, index, "type", uniqueIndexes.indexOf(index) >= 0));
-					};
+				_.map(indexes, index => async () => {
+
+					await this._pg_declare_index(NoPg.Document, type, index);
+
+					await this._pg_declare_index(NoPg.Document, type, index, "types_id", uniqueIndexes.indexOf(index) >= 0);
+
+					await this._pg_declare_index(NoPg.Document, type, index, "type", uniqueIndexes.indexOf(index) >= 0);
+
 				}),
 				(a, b) => a.then(b),
 				Promise.resolve(undefined)
 			);
 
-			self.push(type);
+			this._save_result_to_queue(type);
 
-		}
+			return this;
 
-		return declareType2;
+		};
 	}
 
-	/** Delete method */
-	delMethod(type) {
+	/** Delete method
+	 *
+	 * @param type {string}
+	 * @returns {function(*=): NoPg}
+	 */
+	delMethod (type) {
 
 		AssertUtils.isString(type);
 
-		let self = this;
+		const myGetMethod = this._getMethod(type);
 
-		let self_get_method = self._getMethod(type);
+		return async name => {
 
-		return function(name) {
 			AssertUtils.isString(name);
-			return NoPgUtils.extendPromise( [NoPg], NoPgUtils.nr_fcall("nopg:delMethod", function() {
-				return self_get_method(name).then(function(method) {
-					if (!(method instanceof NoPg.Method)) {
-						throw new TypeError("invalid method received: " + LogUtils.getAsString(method) );
-					}
-					return do_delete(self, NoPg.Method, method).then(function() { return self; });
-				});
-			}));
+
+			const method = await myGetMethod(name);
+
+			if (!(method instanceof NoPg.Method)) {
+				throw new TypeError("invalid method received: " + LogUtils.getAsString(method) );
+			}
+
+			await this._doDelete(NoPg.Method, method);
+
+			return this;
+
 		};
+
 	}
 
 	/**
@@ -1513,145 +1521,226 @@ export class NoPg {
 		return this.delMethod(name);
 	}
 
-	/** Search methods */
-	_searchMethods(type) {
-		let self = this;
-		let ObjType = NoPg.Method;
+	/** Search methods
+	 *
+	 * @param type {string}
+	 * @returns {function(*=, *=): Object}
+	 * @private
+	 */
+	_searchMethods (type) {
+
 		AssertUtils.isString(type);
-		return function nopg_prototype_search_methods_(opts, traits) {
+
+		const ObjType = NoPg.Method;
+
+		const myGetMethodResults = NoPgUtils.get_results(ObjType);
+
+		return async (opts, traits) => {
+
 			if ( opts !== undefined) AssertUtils.isObject(opts);
+
 			opts = opts || {};
+
 			opts.$type = type;
+
 			if (!opts.hasOwnProperty('$active')) {
 				opts.$active = true;
 			}
-			return do_select(self, ObjType, opts, traits).then(get_results(NoPg.Method));
+
+			const rows = await this._doSelect(ObjType, opts, traits);
+
+			return myGetMethodResults(rows);
+
 		};
+
 	}
 
-	// noinspection JSUnusedGlobalSymbols
-	/** Search methods */
-	searchMethods(type) {
-		let self = this;
+	/** Search methods
+	 *
+	 * @param type {string}
+	 * @returns {function(*=, *=): NoPg}
+	 */
+	searchMethods (type) {
+
 		AssertUtils.isString(type);
-		let self_search_methods = self._searchMethods(type);
-		return function nopg_prototype_search_methods_(opts, traits) {
-			return NoPgUtils.extendPromise( [NoPg], NoPgUtils.nr_fcall("nopg:searchMethods", function() {
-				return self_search_methods(opts, traits).then(save_result_to_queue(self)).then(function() { return self; });
-			}));
+
+		const mySearchMethods = this._searchMethods(type);
+
+		return async (opts, traits) => {
+
+			const result = await mySearchMethods(opts, traits);
+
+			this._save_result_to_queue(result);
+
+			return this;
+
 		};
+
 	}
 
-	/** Get active method if it exists */
-	_getMethod(type) {
-		let self = this;
+	/** Get active method if it exists
+	 *
+	 * @param type {string}
+	 * @returns {function(*=): Promise<*>}
+	 * @private
+	 */
+	_getMethod (type) {
+
 		AssertUtils.isString(type);
-		return function nopg_prototype_get_method_(name) {
+
+		const myGetMethodResult = NoPgUtils.get_result(NoPg.Method);
+
+		return async name => {
+
 			AssertUtils.isString(name);
+
 			let where = {
 				'$type': type,
 				'$name': name,
 				'$active': true
 			};
+
 			let traits = {
 				'order': ['$created']
 			};
-			return do_select(self, NoPg.Method, where, traits).then(NoPgUtils.get_result(NoPg.Method));
+
+			const rows = await this._doSelect(NoPg.Method, where, traits);
+
+			return myGetMethodResult(rows);
+
 		};
+
 	}
 
-	/** Create a new method. We recommend using `._declareMethod()` instead of this unless you want an error if the method exists already. Use like `db._createMethod([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`. Returns the result instead of saving it to `self` queue. */
-	_createMethod(type) {
-		let self = this;
+	/** Create a new method. We recommend using `._declareMethod()` instead of this unless you want an error if the
+	 * method exists already. Use like `db._createMethod([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`. Returns the
+	 * result instead of saving it to `self` queue.
+	 *
+	 * @param type {string}
+	 * @returns {function(*=, *=, *=): Promise<*>}
+	 * @private
+	 */
+	_createMethod (type) {
+
 		AssertUtils.isString(type);
 
-		function createMethod2(name, body, data) {
-			return NoPgUtils.extendPromise( [NoPg], NoPgUtils.nr_fcall("nopg:_createMethod", function() {
+		const getMethodResult = NoPgUtils.get_result(NoPg.Method);
 
-				if ( data !== undefined) AssertUtils.isObject(data);
-				data = data || {};
+		return async (name, body, data) => {
 
-				AssertUtils.isString(name);
+			if ( data !== undefined ) AssertUtils.isObject(data);
 
-				if (_.isFunction(body)) {
-					body = '' + body;
-				}
-				if ( body !== undefined) AssertUtils.isString(body);
-				body = body || "";
+			data = data || {};
 
-				data.$type = ''+type;
-				data.$name = ''+name;
-				data.$body = ''+body;
+			AssertUtils.isString(name);
 
-				return self._getType(type).then(function(type_obj) {
-					data.$types_id = type_obj.$id;
-					return self._doInsert(NoPg.Method, data).then(NoPgUtils.get_result(NoPg.Method));
-				});
-			}));
-		}
+			if ( _.isFunction(body) ) {
+				body = '' + body;
+			}
 
-		return createMethod2;
+			if ( body !== undefined ) AssertUtils.isString(body);
+
+			body = body || "";
+
+			data.$type = '' + type;
+			data.$name = '' + name;
+			data.$body = '' + body;
+
+			// FIXME: Could this started before here?
+			const type_obj = await this._getType(type);
+
+			data.$types_id = type_obj.$id;
+
+			const rows = await this._doInsert(NoPg.Method, data);
+
+			return getMethodResult(rows);
+
+		};
+
 	}
 
-	/** Create a new method. We recommend using `.declareMethod()` instead unless you want an error if the type exists already. Use like `db.createMethod([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`. */
-	createMethod(type) {
-		let self = this;
-		let self_create_method = self._createMethod(type);
+	/** Create a new method. We recommend using `.declareMethod()` instead unless you want an error if the type exists already. Use like `db.createMethod([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`.
+	 *
+	 * @param type {string}
+	 * @returns {function(*,*,*): NoPg}
+	 */
+	createMethod (type) {
 
-		function createMethod2(name, body, data) {
-			return NoPgUtils.extendPromise( [NoPg], NoPgUtils.nr_fcall("nopg:createMethod", function() {
-				return self_create_method(name, body, data).then(save_result_to(self));
-			}));
-		}
+		let createMethodFunc = this._createMethod(type);
 
-		return createMethod2;
+		return async (name, body, data) => {
+
+			const result = await createMethodFunc(name, body, data);
+
+			this._save_result_to_queue(result);
+
+			return this;
+
+		};
+
 	}
 
 	// noinspection JSUnusedGlobalSymbols
-	/** Create a new method or replace existing with new values. Use like `db.declareMethod([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`. */
-	declareMethod(type) {
-		let self = this;
+	/** Create a new method or replace existing with new values. Use like `db.declareMethod([TYPE-NAME])(METHOD-NAME, METHOD-BODY, [OPT(S)])`.
+	 *
+	 * @param type {string}
+	 * @returns {function(*=, *=, *=): NoPg}
+	 */
+	declareMethod (type) {
 
-		function declareMethod2(name, body, data) {
-			return NoPgUtils.extendPromise( [NoPg], NoPgUtils.nr_fcall("nopg:declareMethod", function() {
+		const myGetMethod = this._getMethod(type);
 
-				AssertUtils.isString(type);
-				AssertUtils.isString(name);
-				if ( data !== undefined) AssertUtils.isObject(data);
-				data = data || {};
+		const myCreateMethod = this._createMethod(type);
 
-				if (!data.hasOwnProperty('$active')) {
-					data.$active = true;
-				} else if (data.$active !== true) {
-					data.$active = null;
-				}
+		return async (name, body, data) => {
 
-				return self._getMethod(type)(name).then(function(method) {
-					if ( method && (body === method.$body)) {
-						return self._update(method, merge({}, data, {'$body':body}));
-					}
-					return self._createMethod(type)(name, body, data);
-				}).then(function(method) {
-					return self.push(method);
-				});
-			}));
-		}
+			AssertUtils.isString(type);
 
-		return declareMethod2;
+			AssertUtils.isString(name);
+
+			if ( data !== undefined ) AssertUtils.isObject(data);
+
+			data = data || {};
+
+			if ( !data.hasOwnProperty('$active') ) {
+				data.$active = true;
+			} else if ( data.$active !== true ) {
+				data.$active = null;
+			}
+
+			let method = await myGetMethod(name);
+
+			if ( method && (body === method.$body) ) {
+				method = await this._update(method, merge({}, data, {'$body': body}));
+			} else {
+				method = await myCreateMethod(name, body, data);
+			}
+
+			this._save_result_to_queue(method);
+
+			return this;
+
+		};
+
 	}
 
 	/** Returns a document builder function */
-	_createDocumentBuilder(type) {
+	_createDocumentBuilder (type) {
+
 		let self = this;
+
 		AssertUtils.isString(type);
+
 		let self_search_methods = self._searchMethods(type);
-		return function nopg_prototype_create_document_builder_() {
+
+		return function () {
+
 			return self_search_methods({'$active': true}).then(function(methods) {
 
 				/** Appends methods to doc */
 				function _doc_builder(doc) {
 					if (NoPgUtils.isObjectNotArray(doc)) {
-						ARRAY(methods).forEach(method => {
+						_.forEach(methods, method => {
 							doc[method.$name] = FUNCTION.parse(method.$body).bind(doc);
 						});
 					}
@@ -1685,20 +1774,33 @@ export class NoPg {
 				doc_builder.reset = reset_methods;
 
 				return doc_builder;
+
 			});
+
 		};
 	}
 
-	/** Returns a document builder function */
+	/** Returns a document builder function
+	 *
+	 * @param type {string}
+	 * @returns {function(): NoPg}
+	 */
 	createDocumentBuilder(type) {
-		let self = this;
+
 		AssertUtils.isString(type);
-		let self_create_document_builder = self._createDocumentBuilder(type);
-		return function nopg_prototype_create_document_builder_() {
-			return NoPgUtils.extendPromise( [NoPg], NoPgUtils.nr_fcall("nopg:createDocumentBuilder", function() {
-				return self_create_document_builder().then(save_result_to_queue(self)).then(function() { return self; });
-			}));
+
+		const myCreateDocumentBuilder = this._createDocumentBuilder(type);
+
+		return async () => {
+
+			const rows = await myCreateDocumentBuilder();
+
+			this._save_result_to_queue(rows);
+
+			return this;
+
 		};
+
 	}
 
 	/** Setups a document builder function in session cache */
@@ -1940,10 +2042,10 @@ export class NoPg {
 				return self._getType(where).then(function(type) {
 					return indexes.map(function build_step(index) {
 						return function step() {
-							return pg_declare_index(self, NoPg.Document, type, index).then(function() {
-								return pg_declare_index(self, NoPg.Document, type, index, "types_id", uniqueIndexes.indexOf(index) >= 0);
+							return self._pg_declare_index(NoPg.Document, type, index).then(function() {
+								return self._pg_declare_index(NoPg.Document, type, index, "types_id", uniqueIndexes.indexOf(index) >= 0);
 							}).then(function() {
-								return pg_declare_index(self, NoPg.Document, type, index, "type", uniqueIndexes.indexOf(index) >= 0);
+								return self._pg_declare_index(NoPg.Document, type, index, "type", uniqueIndexes.indexOf(index) >= 0);
 							});
 						};
 					}).reduce(Q.when, Q()).then(function() {
